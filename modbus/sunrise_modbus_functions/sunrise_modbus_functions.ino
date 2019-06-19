@@ -30,9 +30,10 @@ const uint8_t SUNRISE_ADDR           = 0x68;
 /*********************************************************************************************/
 
 /* Read Holding Register, Function code: 0x03 */
-uint16_t value = 0;
 
 uint16_t readHoldingRegister(uint8_t comAddr, uint8_t regAddr) {
+  uint16_t value = 0;
+  
   byte modbusPDU[] = {comAddr, 0x03, 0x00, regAddr, 0x00, 0x01};
 
   /* Create CRC */
