@@ -7,7 +7,7 @@
  * @details     Should work fine on Arduino Mega 2560
  *              
  * @author      William Sandkvist
- * @version     0.06
+ * @version     0.07
  * @date        2019-06-19
  *
  *******************************************************************************
@@ -24,15 +24,18 @@ SoftwareSerial SunriseSerial = SoftwareSerial(SUNRISE_TX, SUNRISE_RX);
 const int       MIN_READ_PERIOD_MS      = 2000;
 /* Sunrise communication address, both for Modbus and I2C */
 const uint8_t   SUNRISE_ADDR            = 0x68;
-/* Delay when waiting for responses, in milliseconds.
+/* 
+ * Delay when waiting for responses, in milliseconds.
  * Based on the documentation, "Modbus on Senseair Sunrise", headline 
  * "1.3 Bus timing" on page 4.
  */
 const int       WAIT                    = 180;
 
+const int       MAX_ATTEMPTS            = 5;
+
+
 /* Read Holding Register */
-/*************************/
-uint16_t read_holding_register(uint8_t comAddr, uint16_t regAddr) {
+uint16_t holding_register_read(uint8_t comAddr, uint16_t regAddr) {
   /* Return variable */
   uint16_t returnValue = 0;
 
@@ -84,9 +87,9 @@ uint16_t read_holding_register(uint8_t comAddr, uint16_t regAddr) {
   return returnValue;
 }
 
+
 /* Read Input Register */
-/***********************/
-uint16_t read_input_register(uint8_t comAddr, uint16_t regAddr) {
+uint16_t input_register_read(uint8_t comAddr, uint16_t regAddr) {
   /* Return variable */
   uint16_t returnValue = 0;
 
@@ -140,7 +143,6 @@ uint16_t read_input_register(uint8_t comAddr, uint16_t regAddr) {
 
 
 /* Write to Registers */
-/**********************/
 void write_to_register(uint8_t comAddr, uint8_t regAddr, uint16_t writeVal) {
   /* PDU variables */
   uint8_t funCode = 0x10;
@@ -188,13 +190,9 @@ void write_to_register(uint8_t comAddr, uint8_t regAddr, uint16_t writeVal) {
   _handler(response, funCode, responseSize);
 }
 
-/*********************************************************************************************/
-/*********************************************************************************************/
-/*********************************************************************************************/
 
 /* Read holding registers */
-/**************************/
-uint16_t request_holding_registers(uint8_t comAddr, uint16_t regAddr, uint16_t numReg, uint16_t returnValues[]) {
+void read_holding_registers(uint8_t comAddr, uint16_t regAddr, uint16_t numReg, uint16_t returnValues[]) {
   /* PDU variables */
   uint8_t funCode = 0x03;
 
@@ -221,7 +219,7 @@ uint16_t request_holding_registers(uint8_t comAddr, uint16_t regAddr, uint16_t n
 
   if(SunriseSerial.available() <= 0) {
     Serial.println("Response time-out");
-    return returnValues;
+    return;
   }
   
   /* Store response bytes into a response array */
@@ -234,7 +232,7 @@ uint16_t request_holding_registers(uint8_t comAddr, uint16_t regAddr, uint16_t n
 
   /* Check the response for errors and exceptions */
   if(_handler(response, funCode, responseSize) < 0) {
-    return returnValues;
+    return;
   }
 
   /* Combine the bytes containing the requested values into words */
@@ -246,13 +244,11 @@ uint16_t request_holding_registers(uint8_t comAddr, uint16_t regAddr, uint16_t n
     counter++;
     slot = slot + 2;
   }
-  
-  return returnValues;
 }
 
+
 /* Read input registers */
-/************************/
-uint16_t request_input_registers(uint8_t comAddr, uint16_t regAddr, uint16_t numReg, uint16_t returnValues[]) {
+void read_input_registers(uint8_t comAddr, uint16_t regAddr, uint16_t numReg, uint16_t returnValues[]) {
   /* PDU variables */
   uint8_t funCode = 0x04;
 
@@ -279,7 +275,7 @@ uint16_t request_input_registers(uint8_t comAddr, uint16_t regAddr, uint16_t num
 
   if(SunriseSerial.available() <= 0) {
     Serial.println("Response time-out");
-    return returnValues;
+    return;
   }
   
   /* Store response bytes into a response array */
@@ -292,7 +288,7 @@ uint16_t request_input_registers(uint8_t comAddr, uint16_t regAddr, uint16_t num
 
   /* Check the response for errors and exceptions */
   if(_handler(response, funCode, responseSize) < 0) {
-    return returnValues;
+    return;
   }
 
   /* Combine the bytes containing the requested values into words */
@@ -304,13 +300,11 @@ uint16_t request_input_registers(uint8_t comAddr, uint16_t regAddr, uint16_t num
     counter++;
     slot = slot + 2;
   }
-  
-  return returnValues;
 }
 
+
 /* Write to multiple registers */
-/*******************************/
-void request_write_registers(uint8_t comAddr, uint8_t regAddr, uint16_t numReg, uint16_t writeVal[]) {
+void write_multiple_registers(uint8_t comAddr, uint8_t regAddr, uint16_t numReg, uint16_t writeVal[]) {
   /* PDU variables */
   uint8_t funCode = 0x10;
 
@@ -384,16 +378,63 @@ void request_write_registers(uint8_t comAddr, uint8_t regAddr, uint16_t numReg, 
   _handler(response, funCode, responseSize);
 }
 
-/* TODO: Read Device Identification */
-void read_device_id() {
-  
-}
-/*********************************************************************************************/
-/*********************************************************************************************/
-/*********************************************************************************************/
 
-/* FUNCTION: EXCEPTION AND ERROR HANDLER */
-/*****************************************/
+/* Read Device Identification */
+void read_device_id(uint8_t comAddr, uint8_t objectId, char returnValue[]) {
+  /* PDU variables */
+  uint8_t funCode = 0x2B;
+
+  uint8_t meiType = 0x0E;
+
+  uint8_t idCode = 0x04;
+
+  /* Define Modbus PDU */
+  uint8_t modbusPDU[] = {comAddr, funCode, meiType, idCode, objectId};
+
+  /* Create CRC */
+  uint16_t crc = _generate_crc(modbusPDU, sizeof(modbusPDU));
+  uint8_t crcLo = crc & 0xFF;
+  uint8_t crcHi = (crc >> 8);
+
+  /* Request (HEX) */
+  uint8_t modbusSerialPDU[] = {comAddr, funCode, meiType, idCode, objectId, crcLo, crcHi};
+  SunriseSerial.write(modbusSerialPDU, sizeof(modbusSerialPDU));
+
+  /* Wait for response */
+  delay(WAIT);
+
+  if(SunriseSerial.available() <= 0) {
+    Serial.println("Response time-out");
+    return;
+  }
+  
+  /* Store response bytes into a response array */
+  int responseSize = SunriseSerial.available();
+  uint8_t response [responseSize];
+
+  for(int n = 0 ; n < responseSize ; n++) {
+    response[n] = SunriseSerial.read();
+  }
+  
+  /* Check the response for errors and exceptions */
+  if(_handler(response, funCode, responseSize) < 0) {
+    return;
+  }
+
+  /* Combine the bytes containing the requested values into words */
+  int counter = 0;
+  int slot = 10;
+    while(counter < response[9]) {
+    returnValue[counter] = response[slot];
+
+    counter++;
+    slot++;
+  }
+  returnValue[counter] = '\0';
+}
+
+
+/* EXCEPTION AND ERROR HANDLER */
 int _handler(uint8_t pdu[], uint8_t funCode, int len) {
   /* Return variable */
   int error = 0;
@@ -442,10 +483,9 @@ int _handler(uint8_t pdu[], uint8_t funCode, int len) {
   return error;
 }
 
+
 /* GENERATE CRC */
-/****************/
-uint16_t _generate_crc(uint8_t pdu[], int len)
-{
+uint16_t _generate_crc(uint8_t pdu[], int len) {
   uint16_t crc = 0xFFFF;
   
   for(int pos = 0 ; pos < len ; pos++) {
@@ -468,16 +508,14 @@ uint16_t _generate_crc(uint8_t pdu[], int len)
   return crc;  
 }
 
-/*********************************************************************************************/
-/*********************************************************************************************/
-/*********************************************************************************************/
 
+/* This code runs once at start */
 void setup() {
   pinMode(LED_BUILTIN, OUTPUT);
   digitalWrite(LED_BUILTIN, HIGH);
   
   /* Begin serial communication */
-  Serial.begin(9600);
+  Serial.begin(115200);
   SunriseSerial.begin(9600);
 
   while(SunriseSerial.available() > 0) {
@@ -486,10 +524,11 @@ void setup() {
   
   Serial.println("Initialization complete");
 
-  //read_sensor_config_multi(SUNRISE_ADDR);
-  read_sensor_config_single(SUNRISE_ADDR);
+  read_sensor_config(SUNRISE_ADDR);
   
   delay(MIN_READ_PERIOD_MS);
+
+  read_sensor_id(SUNRISE_ADDR);
 
   /* Change measurement mode */
   //change_measurement_mode(SUNRISE_ADDR);
@@ -498,43 +537,15 @@ void setup() {
   //change_measurement_config(SUNRISE_ADDR);
 }
 
-/*********************************************************************************************/
-/*********************************************************************************************/
-/*********************************************************************************************/
-
-/* Read the sensor's measurement configurations, one at a time and print them */
-void read_sensor_config_multi(uint8_t target) {
-  /* Function variables */
-  uint16_t regAddrMode = 0x000A;
-  uint16_t regAddrPeriod = 0x000B;
-  uint16_t regAddrSamples = 0x000C;
-  
-  uint16_t measMode = read_holding_register(target, regAddrMode);
-  uint16_t measPeriod = read_holding_register(target, regAddrPeriod);
-  uint16_t measSamples = read_holding_register(target, regAddrSamples);
-
-  /* Read measurement mode (0 = Continuous, 1 = Single) */
-  Serial.print("Measurement Mode: ");
-  Serial.println(measMode);
-
-  /* Read measurement period */
-  Serial.print("Measurement Period: ");
-  Serial.print(measPeriod);
-  Serial.println(" sec");
-
-  /* Read measurement samples */
-  Serial.print("Measurement Samples: ");
-  Serial.println(measSamples);
-}
 
 /* Read the sensor's measurement configurations, all at once, and print them */
-void read_sensor_config_single(uint8_t target) {
+void read_sensor_config(uint8_t target) {
   /* Function variables */
   uint16_t regAddrMode = 0x000A;
   uint16_t numReg = 0x0003;
   
   uint16_t values[numReg];
-  request_holding_registers(target, regAddrMode, numReg, values);
+  read_holding_registers(target, regAddrMode, numReg, values);
 
   uint16_t measMode = values[0];
   uint16_t measPeriod = values[1];
@@ -555,44 +566,23 @@ void read_sensor_config_single(uint8_t target) {
   
 }
 
-/* Read the sensor's current CO2 value and Error Status, one request for each 
- * register to read, and print them.
- */
-void read_sensor_measurements_multi(uint8_t target) {
+
+/* Read the sensor's current CO2 value and Error Status */
+void read_sensor_measurements(uint8_t target) {
   /* Function variables */
   uint16_t regAddrCo2 = 0x0003;
   uint16_t regAddrEStatus = 0x0000;
 
   /* Read CO2 value */
-  uint16_t co2Value = read_input_register(target, regAddrCo2);
+  uint16_t co2Value = input_register_read(target, regAddrCo2);
   Serial.print("CO2: ");
   Serial.print(co2Value);
   Serial.println(" ppm");
 
   /* Read error status */
-  uint16_t eStatus = read_input_register(target, regAddrEStatus);
+  uint16_t eStatus = input_register_read(target, regAddrEStatus);
   Serial.print("Error Status: 0x");
   Serial.println(eStatus, HEX);
-}
-
-/* Read the sensor's current CO2 value and Error Status, one request, and print them */
-void read_sensor_measurements_single(uint8_t target) {
-  /* Function variables */
-  uint16_t regAddr = 0x0000;
-  uint16_t numReg = 0x0004;
-  uint16_t value[numReg];
-
-  request_input_registers(target, regAddr, numReg, value);
-  /* Read CO2 value */
-  Serial.print("CO2: ");
-  Serial.print(value[3]);
-  Serial.println(" ppm");
-
-  /* value[1] and [2] are reserved registers */
-  
-  /* Read error status */;
-  Serial.print("Error Status: 0x");
-  Serial.println(value[0], HEX);
 }
 
 
@@ -603,17 +593,20 @@ void change_measurement_mode(uint8_t target) {
   uint16_t continuous = 0x0000;
   uint16_t single = 0x0001;
   
-  if(read_holding_register(target, regAddr) == continuous) {
+  if(holding_register_read(target, regAddr) == continuous) {
     write_to_register(target, regAddr, (uint16_t)single);
     Serial.println("Measurement mode changed to Single Mode");
     
-  }else if(read_holding_register(target, regAddr) == single) {
+  }else if(holding_register_read(target, regAddr) == single) {
     write_to_register(target, regAddr, (uint16_t)continuous);
     Serial.println("Measurement mode changed to Continuous Mode");
   } 
+
+  Serial.println("Sensor restart is required to apply changes");
 }
 
-/* Change measurement mode */
+
+/* Change measurement configs (Measurement mode, period and sample size) */
 void change_measurement_config(uint8_t target) {
   /* Function variables */
   uint16_t regAddrMode = 0x000A;
@@ -634,55 +627,62 @@ void change_measurement_config(uint8_t target) {
   uint16_t input[3];
 
   /* Check current values and change input accordingly */
-  if(read_holding_register(target, regAddrMode) == continuous) {
+  if(holding_register_read(target, regAddrMode) == continuous) {
     input[0] = single;
     Serial.println("Measurement mode changed to Single Mode");
     
-  }else if(read_holding_register(target, regAddrMode) == single) {
+  }else if(holding_register_read(target, regAddrMode) == single) {
     input[0] = continuous;
     Serial.println("Measurement mode changed to Continuous Mode");
   } 
 
-  if(read_holding_register(target, regAddrPeriod) == periodShort) {
+  if(holding_register_read(target, regAddrPeriod) == periodShort) {
     input[1] = periodLong;
     Serial.println("Measurement period changed to 4 sec");
-  }else if(read_holding_register(target, regAddrPeriod) == periodLong) {
+  }else if(holding_register_read(target, regAddrPeriod) == periodLong) {
     input[1] = periodShort;
     Serial.println("Measurement period changed to 2 sec");
   }
 
-  if(read_holding_register(target, regAddrSamples) == samplesFew) {
+  if(holding_register_read(target, regAddrSamples) == samplesFew) {
     input[2] = samplesMany;
     Serial.println("Measurement samples changed to 16");
-  }else if(read_holding_register(target, regAddrSamples) == samplesMany) {
+  }else if(holding_register_read(target, regAddrSamples) == samplesMany) {
     input[2] = samplesFew;
     Serial.println("Measurement samples changed to 8");
   }
 
-  request_write_registers(target, regAddrMode, numReg, input);
-  Serial.println("Success!");
+  /* Send a request to change the values */
+  write_multiple_registers(target, regAddrMode, numReg, input);
+  Serial.println("Sensor restart is required to apply changes");
 }
 
-/*********************************************************************************************/
-/*********************************************************************************************/
-/*********************************************************************************************/
+
+/* Read device ID */
+void read_sensor_id(uint8_t target) {
+  char value1[9];
+  char value2[8];
+  char value3[4];
+  read_device_id(target, 0, value1);
+  read_device_id(target, 1, value2);
+  read_device_id(target, 2, value3);
+  Serial.println(value1);
+  Serial.println(value2);
+  Serial.println(value3);
+}
+
 
 /* Main loop */
-void loop()
-{
+void loop() {
   static int pin_value = HIGH;
   
   /* Delay between readings */
   Serial.println("Waiting...");
   delay(60000);
 
-  /* Read measurements, one request for each register to read */
-  //Serial.println("Multiple requests: ");
-  //read_sensor_measurements_multi(SUNRISE_ADDR);
-
-  /* Read measurements, one request for all registers */
-  Serial.println("Single request");
-  read_sensor_measurements_single(SUNRISE_ADDR);
+  /* Read measurements */
+  Serial.println("Multiple requests: ");
+  read_sensor_measurements(SUNRISE_ADDR);
   
   /* Indicate working state */
   digitalWrite(LED_BUILTIN, pin_value);
