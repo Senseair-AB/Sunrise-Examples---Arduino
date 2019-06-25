@@ -7,7 +7,7 @@
  * @details     Tested on Arduino Mega 2560
  *              
  * @author      William Sandkvist
- * @version     0.08
+ * @version     0.09
  * @date        2019-06-19
  *
  *******************************************************************************
@@ -21,7 +21,7 @@ const int       SUNRISE_RX              = 11;
 SoftwareSerial SunriseSerial = SoftwareSerial(SUNRISE_TX, SUNRISE_RX);
 
 /* Reading period */
-const int       MIN_READ_PERIOD_MS      = 2000; /** Detailed description after variable* /
+const int       MIN_READ_PERIOD_MS      = 2000;
 
 /* Sunrise communication address, both for Modbus and I2C */
 const uint8_t   SUNRISE_ADDR            = 0x68;
@@ -35,6 +35,9 @@ const int       WAIT                    = 180;
 
 /* Maximum attempts for a request */
 const int       MAX_ATTEMPTS            = 5;
+
+/* Variable for keeping track of failed attempts */
+int attempt = 0;
 
 /**
   * @brief  Reads a holding register.
@@ -69,11 +72,13 @@ uint16_t holding_register_read(uint8_t comAddr, uint16_t regAddr) {
   SunriseSerial.write(modbusSerialPDU, sizeof(modbusSerialPDU));
 
   /* Wait for response */
-  delay(WAIT);
-
-  if(SunriseSerial.available() <= 0) {
-    Serial.println("Response time-out");
-    return returnValue;
+  while(SunriseSerial.available() <= 0) {
+    delay(WAIT);
+    attempt++;
+    if(attempt >= MAX_ATTEMPTS) {
+      Serial.println("Response time-out");
+      return returnValue; 
+    }
   }
   
   /* Store response bytes into a response array */
@@ -85,16 +90,32 @@ uint16_t holding_register_read(uint8_t comAddr, uint16_t regAddr) {
   }
 
   /* Check the response for errors and exceptions */
-  if(_handler(response, funCode, responseSize) < 0) {
-    return returnValue;
+  while(_handler(response, funCode, responseSize) < 0) {
+    attempt++;
+    if(attempt >= MAX_ATTEMPTS) {
+      Serial.println("Reached max attempts. Request cancelled.");
+      return returnValue;
+    }
+    /* Re-send PDU */
+    SunriseSerial.write(modbusSerialPDU, sizeof(modbusSerialPDU));
+
+    /* Store response bytes into a response array */
+    int responseSize = SunriseSerial.available();
+    uint8_t response [responseSize];
+  
+    for(int n = 0 ; n < responseSize ; n++) {
+      response[n] = SunriseSerial.read();
+    }
   }
+
+  /* Reset attempt on success */
+  attempt = 0;
 
   /* Combine the bytes containing the requested values into a word */
   returnValue = ((int16_t)(int8_t) response[3] << 8) | (uint16_t)response[4];
-  
+
   return returnValue;
 }
-
 
 /**
   * @brief  Reads an input register.
@@ -129,11 +150,13 @@ uint16_t input_register_read(uint8_t comAddr, uint16_t regAddr) {
   SunriseSerial.write(modbusSerialPDU, sizeof(modbusSerialPDU));
 
   /* Wait for response */
-  delay(WAIT);
-
-  if(SunriseSerial.available() <= 0) {
-    Serial.println("Response time-out");
-    return returnValue;
+  while(SunriseSerial.available() <= 0) {
+    delay(WAIT);
+    attempt++;
+    if(attempt >= MAX_ATTEMPTS) {
+      Serial.println("Response time-out");
+      return returnValue; 
+    }
   }
 
   /* Store response bytes into a response array */
@@ -145,15 +168,33 @@ uint16_t input_register_read(uint8_t comAddr, uint16_t regAddr) {
   }
 
   /* Check the response for errors and exceptions */
-  if(_handler(response, funCode, responseSize) < 0) {
-    return returnValue;
+  while(_handler(response, funCode, responseSize) < 0) {
+    attempt++;
+    if(attempt >= MAX_ATTEMPTS) {
+      Serial.println("Reached max attempts. Request cancelled.");
+      return returnValue;
+    }
+    /* Re-send PDU */
+    SunriseSerial.write(modbusSerialPDU, sizeof(modbusSerialPDU));
+
+    /* Store response bytes into a response array */
+    int responseSize = SunriseSerial.available();
+    uint8_t response [responseSize];
+  
+    for(int n = 0 ; n < responseSize ; n++) {
+      response[n] = SunriseSerial.read();
+    }
   }
+
+  /* Reset attempt on success */
+  attempt = 0;
 
   /* Combine the bytes containing the requested values into a word */
   returnValue = ((int16_t)(int8_t) response[3] << 8) | (uint16_t)response[4];
-  
+
   return returnValue;
 }
+
 
 /**
   * @brief  Writes a value to a register
@@ -191,11 +232,13 @@ void write_to_register(uint8_t comAddr, uint8_t regAddr, uint16_t writeVal) {
   SunriseSerial.write(modbusSerialPDU, sizeof(modbusSerialPDU));
 
   /* Wait for response */
-  delay(WAIT);
-
-  if(SunriseSerial.available() <= 0) {
-    Serial.println("Response time-out");
-    return;
+  while(SunriseSerial.available() <= 0) {
+    delay(WAIT);
+    attempt++;
+    if(attempt >= MAX_ATTEMPTS) {
+      Serial.println("Response time-out");
+      return; 
+    }
   }
 
   /* Store response bytes into a response array */
@@ -207,9 +250,27 @@ void write_to_register(uint8_t comAddr, uint8_t regAddr, uint16_t writeVal) {
   }
 
   /* Check the response for errors and exceptions */
-  _handler(response, funCode, responseSize);
-}
+  while(_handler(response, funCode, responseSize) < 0) {
+    attempt++;
+    if(attempt >= MAX_ATTEMPTS) {
+      Serial.println("Reached max attempts. Request cancelled.");
+      return;
+    }
+    /* Re-send PDU */
+    SunriseSerial.write(modbusSerialPDU, sizeof(modbusSerialPDU));
 
+    /* Store response bytes into a response array */
+    int responseSize = SunriseSerial.available();
+    uint8_t response [responseSize];
+  
+    for(int n = 0 ; n < responseSize ; n++) {
+      response[n] = SunriseSerial.read();
+    }
+  }
+
+  /* Reset attempt on success */
+  attempt = 0;
+}
 
 /**
   * @brief  Reads multiple holding registers.
@@ -245,11 +306,13 @@ void read_holding_registers(uint8_t comAddr, uint16_t regAddr, uint16_t numReg, 
   SunriseSerial.write(modbusSerialPDU, sizeof(modbusSerialPDU));
 
   /* Wait for response */
-  delay(WAIT);
-
-  if(SunriseSerial.available() <= 0) {
-    Serial.println("Response time-out");
-    return;
+  while(SunriseSerial.available() <= 0) {
+    delay(WAIT);
+    attempt++;
+    if(attempt >= MAX_ATTEMPTS) {
+      Serial.println("Response time-out");
+      return; 
+    }
   }
   
   /* Store response bytes into a response array */
@@ -261,9 +324,26 @@ void read_holding_registers(uint8_t comAddr, uint16_t regAddr, uint16_t numReg, 
   }
 
   /* Check the response for errors and exceptions */
-  if(_handler(response, funCode, responseSize) < 0) {
-    return;
+  while(_handler(response, funCode, responseSize) < 0) {
+    attempt++;
+    if(attempt >= MAX_ATTEMPTS) {
+      Serial.println("Reached max attempts. Request cancelled.");
+      return;
+    }
+    /* Re-send PDU */
+    SunriseSerial.write(modbusSerialPDU, sizeof(modbusSerialPDU));
+
+    /* Store response bytes into a response array */
+    int responseSize = SunriseSerial.available();
+    uint8_t response [responseSize];
+  
+    for(int n = 0 ; n < responseSize ; n++) {
+      response[n] = SunriseSerial.read();
+    }
   }
+
+  /* Reset attempt on success */
+  attempt = 0;
 
   /* Combine the bytes containing the requested values into words */
   int counter = 0;
@@ -311,11 +391,13 @@ void read_input_registers(uint8_t comAddr, uint16_t regAddr, uint16_t numReg, ui
   SunriseSerial.write(modbusSerialPDU, sizeof(modbusSerialPDU));
 
   /* Wait for response */
-  delay(WAIT);
-
-  if(SunriseSerial.available() <= 0) {
-    Serial.println("Response time-out");
-    return;
+  while(SunriseSerial.available() <= 0) {
+    delay(WAIT);
+    attempt++;
+    if(attempt >= MAX_ATTEMPTS) {
+      Serial.println("Response time-out");
+      return; 
+    }
   }
   
   /* Store response bytes into a response array */
@@ -327,9 +409,26 @@ void read_input_registers(uint8_t comAddr, uint16_t regAddr, uint16_t numReg, ui
   }
 
   /* Check the response for errors and exceptions */
-  if(_handler(response, funCode, responseSize) < 0) {
-    return;
+  while(_handler(response, funCode, responseSize) < 0) {
+    attempt++;
+    if(attempt >= MAX_ATTEMPTS) {
+      Serial.println("Reached max attempts. Request cancelled.");
+      return;
+    }
+    /* Re-send PDU */
+    SunriseSerial.write(modbusSerialPDU, sizeof(modbusSerialPDU));
+
+    /* Store response bytes into a response array */
+    int responseSize = SunriseSerial.available();
+    uint8_t response [responseSize];
+  
+    for(int n = 0 ; n < responseSize ; n++) {
+      response[n] = SunriseSerial.read();
+    }
   }
+
+  /* Reset attempt on success */
+  attempt = 0;
 
   /* Combine the bytes containing the requested values into words */
   int counter = 0;
@@ -408,12 +507,17 @@ void write_multiple_registers(uint8_t comAddr, uint8_t regAddr, uint16_t numReg,
   SunriseSerial.write(modbusSerialPDU, sizeof(modbusSerialPDU));
 
   /* Wait for response */
-  delay(WAIT);
-
-  if(SunriseSerial.available() <= 0) {
-    Serial.println("Response time-out");
-    return;
+  while(SunriseSerial.available() <= 0) {
+    delay(WAIT);
+    attempt++;
+    if(attempt >= MAX_ATTEMPTS) {
+      Serial.println("Response time-out");
+      return; 
+    }
   }
+
+  /* Reset attempt on success */
+  attempt = 0;
 
   /* Store response bytes into a response array */
   int responseSize = SunriseSerial.available();
@@ -424,9 +528,27 @@ void write_multiple_registers(uint8_t comAddr, uint8_t regAddr, uint16_t numReg,
   }
 
   /* Check the response for errors and exceptions */
-  _handler(response, funCode, responseSize);
-}
+  while(_handler(response, funCode, responseSize) < 0) {
+    attempt++;
+    if(attempt >= MAX_ATTEMPTS) {
+      Serial.println("Reached max attempts. Request cancelled.");
+      return;
+    }
+    /* Re-send PDU */
+    SunriseSerial.write(modbusSerialPDU, sizeof(modbusSerialPDU));
 
+    /* Store response bytes into a response array */
+    int responseSize = SunriseSerial.available();
+    uint8_t response [responseSize];
+  
+    for(int n = 0 ; n < responseSize ; n++) {
+      response[n] = SunriseSerial.read();
+    }
+  }
+
+  /* Reset attempt on success */
+  attempt = 0;
+}
 
 /**
   * @brief  Reads one of the device's ID objects.
@@ -458,11 +580,13 @@ void read_device_id(uint8_t comAddr, uint8_t objectId, char returnValue[]) {
   SunriseSerial.write(modbusSerialPDU, sizeof(modbusSerialPDU));
 
   /* Wait for response */
-  delay(WAIT);
-
-  if(SunriseSerial.available() <= 0) {
-    Serial.println("Response time-out");
-    return;
+  while(SunriseSerial.available() <= 0) {
+    delay(WAIT);
+    attempt++;
+    if(attempt >= MAX_ATTEMPTS) {
+      Serial.println("Response time-out");
+      return; 
+    }
   }
   
   /* Store response bytes into a response array */
@@ -474,9 +598,26 @@ void read_device_id(uint8_t comAddr, uint8_t objectId, char returnValue[]) {
   }
   
   /* Check the response for errors and exceptions */
-  if(_handler(response, funCode, responseSize) < 0) {
-    return;
+  while(_handler(response, funCode, responseSize) < 0) {
+    attempt++;
+    if(attempt >= MAX_ATTEMPTS) {
+      Serial.println("Reached max attempts. Request cancelled.");
+      return;
+    }
+    /* Re-send PDU */
+    SunriseSerial.write(modbusSerialPDU, sizeof(modbusSerialPDU));
+
+    /* Store response bytes into a response array */
+    int responseSize = SunriseSerial.available();
+    uint8_t response [responseSize];
+  
+    for(int n = 0 ; n < responseSize ; n++) {
+      response[n] = SunriseSerial.read();
+    }
   }
+
+  /* Reset attempt on success */
+  attempt = 0;
 
   /* Combine the bytes containing the requested values into words */
   int counter = 0;
@@ -617,7 +758,7 @@ void setup() {
   * @brief  Reads and prints the sensor's current measurement mode,
   *         measurement period and number of samples.
   * 
-  * @param  target: The sensor's communication address.
+  * @param  target: The sensor's communication address
   * @note   This example shows a simple way to read the sensor's
   *         measurement configurations, using one request for
   *         reading the holding registers where they are located.
@@ -654,7 +795,7 @@ void read_sensor_config(uint8_t target) {
   * @brief  Reads and prints the sensor's current CO2 value and
   *         error status.
   * 
-  * @param  target: The sensor's communication address.
+  * @param  target: The sensor's communication address
   * @note   This example shows a simple way to read the sensor's
   *         CO2 measurement and error status, using two requests 
   *         for reading the input registers where they are
@@ -683,7 +824,7 @@ void read_sensor_measurements(uint8_t target) {
   *         it's single mode (register value 1) changes it to 
   *         contiuous mode (register value 0).
   * 
-  * @param  target: The sensor's communication address.
+  * @param  target: The sensor's communication address
   * @note   This example shows a simple way to change the sensor's
   *         measurement mode from single to contiuous, using one 
   *         request for reading the current measurement mode and
@@ -714,7 +855,7 @@ void change_measurement_mode(uint8_t target) {
   * @brief  Changes the sensor's current measurement mode,
   *         measurement period and number of samples.
   * 
-  * @param  target: The sensor's communication address.
+  * @param  target: The sensor's communication address
   * @note   This example shows a simple way to change the sensor's
   *         measurement configurations, using one request for 
   *         reading each current measurement config and then a 
@@ -775,7 +916,7 @@ void change_measurement_config(uint8_t target) {
 }
 
 /**
-  * @brief  Reads and printsthe sensor's device identification
+  * @brief  Reads and prints the sensor's device identification.
   * 
   * @param  target: The sensor's communication address.
   * @note   This example shows a simple way to read and print the 
