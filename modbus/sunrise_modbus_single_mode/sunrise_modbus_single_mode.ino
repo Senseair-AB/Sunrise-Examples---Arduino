@@ -3,12 +3,12 @@
  * @copyright   Copyright (C) by SenseAir AB. All rights reserved.
  * @file        sunrise_modbus_single_mode.ino
  * @brief       Example for reading sensor data in single measurement mode.
- *              Based on the"Modbus on Senseair Sunrise" documentation.
- * @details     Should work fine on Arduino Mega 2560
+ *              Based on the "Modbus on Senseair Sunrise" documentation.
+ * @details     Tested on Arduino Mega 2560
  *              
  * @author      William Sandkvist
- * @version     0.01
- * @date        2019-06-24
+ * @version     0.02
+ * @date        2019-06-25
  *
  *******************************************************************************
  */
@@ -22,21 +22,31 @@ SoftwareSerial SunriseSerial = SoftwareSerial(SUNRISE_TX, SUNRISE_RX);
 
 /* Reading period */
 const int       MIN_READ_PERIOD_MS      = 2000;
+
 /* Sunrise communication address, both for Modbus and I2C */
 const uint8_t   SUNRISE_ADDR            = 0x68;
+
 /* 
  * Delay when waiting for responses, in milliseconds.
- * Based on the documentation, "Modbus on Senseair Sunrise", headline 
- * "1.3 Bus timing" on page 4.
+ * Length based on the documentation, "Modbus on Senseair 
+ * Sunrise", headline "1.3 Bus timing", page 4.
  */
 const int       WAIT                    = 180;
 
+/* Maximum attempts for a request */
 const int       MAX_ATTEMPTS            = 5;
 
+/* An array for storing the sensor state */
 uint16_t        sensorState[12];
 
 
-/* Read Holding Register */
+/**
+  * @brief  Reads a holding register.
+  * 
+  * @param  comAddr: Communication address
+  *         regAddr: Register address
+  * @retval Register value
+  */
 uint16_t holding_register_read(uint8_t comAddr, uint16_t regAddr) {
   /* Return variable */
   uint16_t returnValue = 0;
@@ -89,8 +99,13 @@ uint16_t holding_register_read(uint8_t comAddr, uint16_t regAddr) {
   return returnValue;
 }
 
-
-/* Read Input Register */
+/**
+  * @brief  Reads an input register.
+  * 
+  * @param  comAddr: Communication address
+  *         regAddr: Register address
+  * @retval Register value
+  */
 uint16_t input_register_read(uint8_t comAddr, uint16_t regAddr) {
   /* Return variable */
   uint16_t returnValue = 0;
@@ -144,7 +159,14 @@ uint16_t input_register_read(uint8_t comAddr, uint16_t regAddr) {
 }
 
 
-/* Write to Registers */
+/**
+  * @brief  Writes a value to a register
+  * 
+  * @param  comAddr:  Communication address
+  *         regAddr:  Register address
+  *         writeVal: The value to write to the register
+  * @retval None
+  */
 void write_to_register(uint8_t comAddr, uint8_t regAddr, uint16_t writeVal) {
   /* PDU variables */
   uint8_t funCode = 0x10;
@@ -192,8 +214,17 @@ void write_to_register(uint8_t comAddr, uint8_t regAddr, uint16_t writeVal) {
   _handler(response, funCode, responseSize);
 }
 
-
-/* Read holding registers */
+/**
+  * @brief  Reads multiple holding registers.
+  * 
+  * @param  comAddr:      Communication address
+  *         regAddr:      Register address
+  *         numReg:       Number of registers to read from
+  *         returnValues: The array the register values are written to
+  * @note   This function "returns" its values through an array that is
+  *         passed to the function as an argument.
+  * @retval None
+  */
 void read_holding_registers(uint8_t comAddr, uint16_t regAddr, uint16_t numReg, uint16_t returnValues[]) {
   /* PDU variables */
   uint8_t funCode = 0x03;
@@ -249,7 +280,17 @@ void read_holding_registers(uint8_t comAddr, uint16_t regAddr, uint16_t numReg, 
 }
 
 
-/* Read input registers */
+/**
+  * @brief  Reads multiple input registers.
+  * 
+  * @param  comAddr:      Communication address
+  *         regAddr:      Register address
+  *         numReg:       Number of registers to read from
+  *         returnValues: The array the register values are written to
+  * @note   This function "returns" its values through an array that is
+  *         passed to the function as an argument.
+  * @retval None
+  */
 void read_input_registers(uint8_t comAddr, uint16_t regAddr, uint16_t numReg, uint16_t returnValues[]) {
   /* PDU variables */
   uint8_t funCode = 0x04;
@@ -304,8 +345,17 @@ void read_input_registers(uint8_t comAddr, uint16_t regAddr, uint16_t numReg, ui
   }
 }
 
-
-/* Write to multiple registers */
+/**
+  * @brief  Writes to multiple holding registers.
+  * 
+  * @param  comAddr:  Communication address
+  *         regAddr:  Register address
+  *         numReg:   Number of registers to write to
+  *         writeVal: The array the register values are written to
+  * @note   This function "returns" its values through an array that is
+  *         passed to the function as an argument.
+  * @retval None
+  */
 void write_multiple_registers(uint8_t comAddr, uint8_t regAddr, uint16_t numReg, uint16_t writeVal[]) {
   /* PDU variables */
   uint8_t funCode = 0x10;
@@ -380,8 +430,15 @@ void write_multiple_registers(uint8_t comAddr, uint8_t regAddr, uint16_t numReg,
   _handler(response, funCode, responseSize);
 }
 
-
-/* Read Device Identification */
+/**
+  * @brief  Reads one of the device's ID objects.
+  * 
+  * @param  comAddr:      Communication address
+  *         regAddr:      Register address
+  *         numReg:       Number of registers to write to
+  *         returnValues: Array of values to be written to the registers        
+  * @retval None
+  */
 void read_device_id(uint8_t comAddr, uint8_t objectId, char returnValue[]) {
   /* PDU variables */
   uint8_t funCode = 0x2B;
@@ -435,8 +492,14 @@ void read_device_id(uint8_t comAddr, uint8_t objectId, char returnValue[]) {
   returnValue[counter] = '\0';
 }
 
-
-/* EXCEPTION AND ERROR HANDLER */
+/**
+  * @brief  A handler for possible exceptions and errors.
+  * 
+  * @param  pdu[]: An array containing the response from a request
+  *         funCode: The function code used for the request
+  *         len: The length of the pdu
+  * @retval (int) -1 if an error or exception ocurred, otherwise 0
+  */
 int _handler(uint8_t pdu[], uint8_t funCode, int len) {
   /* Return variable */
   int error = 0;
@@ -485,8 +548,15 @@ int _handler(uint8_t pdu[], uint8_t funCode, int len) {
   return error;
 }
 
-
-/* GENERATE CRC */
+/**
+  * @brief  Computes a Modbus RTU message CRC, for a given message.
+  * 
+  * @param  pdu[]: An array containing the message
+  *         len: the length of the array
+  * @note   The bytes in the return value needs to be switched for
+  *         them to be in the right order in the message.
+  * @retval The CRC for the message
+  */
 uint16_t _generate_crc(uint8_t pdu[], int len) {
   uint16_t crc = 0xFFFF;
   
@@ -510,8 +580,11 @@ uint16_t _generate_crc(uint8_t pdu[], int len) {
   return crc;  
 }
 
-
-/* This code runs once at start */
+/**
+  * @brief  This function runs once at the start.
+  *
+  * @retval None
+  */
 void setup() {
   pinMode(LED_BUILTIN, OUTPUT);
   digitalWrite(LED_BUILTIN, HIGH);
@@ -546,28 +619,43 @@ void setup() {
   read_holding_registers(SUNRISE_ADDR, 0x0022, 0x000C, sensorState);
 }
 
-/* Read device ID */
+/**
+  * @brief  Reads and prints the sensor's device identification.
+  * 
+  * @param  target: The sensor's communication address
+  * @note   This example shows a simple way to read and print the 
+  *         sensor's Vendor Name, ProductCode and MajorMinorRevision, 
+  *         through one read request for each object.
+  * @retval None
+  */
 void read_sensor_id(uint8_t target) {
+  /* Array for Vendor Name */
   char value1[9];
+  /* Array for ProductCode */
   char value2[8];
+  /* Array for MajorMinorRevision */
   char value3[4];
 
+  /* Reads the values */
   read_device_id(target, 0, value1);
-
   read_device_id(target, 1, value2);
-
   read_device_id(target, 2, value3);
-
-  Serial.print("Vendor Name: ");
+  /* Prints the values */
   Serial.println(value1);
-  Serial.print("Product Code: ");
   Serial.println(value2);
-  Serial.print("MajorMinorRevision: ");
   Serial.println(value3);
 }
 
-
-/* Read the sensor's measurement configurations, all at once, and print them */
+/**
+  * @brief  Reads and prints the sensor's current measurement mode,
+  *         measurement period and number of samples.
+  * 
+  * @param  target: The sensor's communication address
+  * @note   This example shows a simple way to read the sensor's
+  *         measurement configurations, using one request for
+  *         reading the holding registers where they are located.
+  * @retval None
+  */
 void read_sensor_config(uint8_t target) {
   /* Function variables */
   uint16_t regAddrMode = 0x000A;
@@ -595,8 +683,21 @@ void read_sensor_config(uint8_t target) {
   
 }
 
-
-/* Change measurement mode */
+/**
+  * @brief  Reads the sensor's current measurement mode, and if
+  *         it's continuous (register value 0) changes it to 
+  *         single mode (register value 1).
+  * 
+  * @param  target: The sensor's communication address
+  * @note   This example shows a simple way to change the sensor's
+  *         measurement mode from continuous to single, using one 
+  *         request for reading the current measurement mode and
+  *         another write request if it has to be changed.
+  *         
+  *         The sensor has to be manually restarted after the
+  *         change.
+  * @retval None
+  */
 void change_measurement_mode(uint8_t target) {
   /* Function variables */
   uint16_t regAddr = 0x000A;
@@ -610,8 +711,16 @@ void change_measurement_mode(uint8_t target) {
   }
 }
 
-
-/* Read the sensor's current CO2 value and Error Status */
+/**
+  * @brief  Reads and prints the sensor's current CO2 value and
+  *         error status.
+  * 
+  * @param  target: The sensor's communication address
+  *         state[]: The sensor state
+  * @note   This example shows a simple way to read the sensor's
+  *         CO2 measurement in single measurement mode.
+  * @retval None
+  */
 void read_sensor_measurements(uint8_t target, uint16_t state[]) {
   /* Function variables */
   uint16_t regAddr = 0x0021;
@@ -621,11 +730,14 @@ void read_sensor_measurements(uint8_t target, uint16_t state[]) {
   uint16_t regAddrEStatus = 0x0000;
 
   uint16_t command[13];
+
+  /* Copy the sensor state into the command array */
   command[0] = 0x0001;
   for(int n = 1 ; n < 13 ; n++) {
     command[n] = sensorState[n - 1];
   }
 
+  /* Drive EN-pin high */
   digitalWrite(11, HIGH);
 
   /* Wait for sensor to wake up */
@@ -649,12 +761,18 @@ void read_sensor_measurements(uint8_t target, uint16_t state[]) {
 
   /* Read sensor state for next measurement */
   read_holding_registers(target, 0x0022, 0x000C, sensorState);
-  
+
+  /* Drive EN-pin low */
   digitalWrite(11, LOW);
 }
 
-
-/* Main loop */
+/**
+  * @brief  The main function loop. Reads the sensor's current
+  *         CO2 value and error status and prints them to the 
+  *         Serial Monitor.
+  * 
+  * @retval None
+  */
 void loop() {
   static int pin_value = HIGH;
   
