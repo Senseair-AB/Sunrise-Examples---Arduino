@@ -8,7 +8,7 @@
  *              
  * @author      William Sandkvist
  * @version     0.09
- * @date        2019-06-19
+ * @date        2019-06-25
  *
  *******************************************************************************
  */
@@ -83,7 +83,7 @@ uint16_t holding_register_read(uint8_t comAddr, uint16_t regAddr) {
   
   /* Store response bytes into a response array */
   int responseSize = SunriseSerial.available();
-  uint8_t response [responseSize];
+  uint8_t response[responseSize];
 
   for(int n = 0 ; n < responseSize ; n++) {
     response[n] = SunriseSerial.read();
@@ -100,8 +100,8 @@ uint16_t holding_register_read(uint8_t comAddr, uint16_t regAddr) {
     SunriseSerial.write(modbusSerialPDU, sizeof(modbusSerialPDU));
 
     /* Store response bytes into a response array */
-    int responseSize = SunriseSerial.available();
-    uint8_t response [responseSize];
+    responseSize = SunriseSerial.available();
+    response[responseSize];
   
     for(int n = 0 ; n < responseSize ; n++) {
       response[n] = SunriseSerial.read();
@@ -161,7 +161,7 @@ uint16_t input_register_read(uint8_t comAddr, uint16_t regAddr) {
 
   /* Store response bytes into a response array */
   int responseSize = SunriseSerial.available();
-  uint8_t response [responseSize];
+  uint8_t response[responseSize];
 
   for(int n = 0 ; n < responseSize ; n++) {
     response[n] = SunriseSerial.read();
@@ -178,8 +178,8 @@ uint16_t input_register_read(uint8_t comAddr, uint16_t regAddr) {
     SunriseSerial.write(modbusSerialPDU, sizeof(modbusSerialPDU));
 
     /* Store response bytes into a response array */
-    int responseSize = SunriseSerial.available();
-    uint8_t response [responseSize];
+    responseSize = SunriseSerial.available();
+    response[responseSize];
   
     for(int n = 0 ; n < responseSize ; n++) {
       response[n] = SunriseSerial.read();
@@ -194,7 +194,6 @@ uint16_t input_register_read(uint8_t comAddr, uint16_t regAddr) {
 
   return returnValue;
 }
-
 
 /**
   * @brief  Writes a value to a register
@@ -243,7 +242,7 @@ void write_to_register(uint8_t comAddr, uint8_t regAddr, uint16_t writeVal) {
 
   /* Store response bytes into a response array */
   int responseSize = SunriseSerial.available();
-  uint8_t response [responseSize];
+  uint8_t response[responseSize];
   
   for(int n = 0 ; n < responseSize ; n++) {
     response[n] = SunriseSerial.read();
@@ -260,9 +259,9 @@ void write_to_register(uint8_t comAddr, uint8_t regAddr, uint16_t writeVal) {
     SunriseSerial.write(modbusSerialPDU, sizeof(modbusSerialPDU));
 
     /* Store response bytes into a response array */
-    int responseSize = SunriseSerial.available();
-    uint8_t response [responseSize];
-  
+    responseSize = SunriseSerial.available();
+    response[responseSize];
+
     for(int n = 0 ; n < responseSize ; n++) {
       response[n] = SunriseSerial.read();
     }
@@ -317,7 +316,7 @@ void read_holding_registers(uint8_t comAddr, uint16_t regAddr, uint16_t numReg, 
   
   /* Store response bytes into a response array */
   int responseSize = SunriseSerial.available();
-  uint8_t response [responseSize];
+  uint8_t response[responseSize];
 
   for(int n = 0 ; n < responseSize ; n++) {
     response[n] = SunriseSerial.read();
@@ -334,8 +333,8 @@ void read_holding_registers(uint8_t comAddr, uint16_t regAddr, uint16_t numReg, 
     SunriseSerial.write(modbusSerialPDU, sizeof(modbusSerialPDU));
 
     /* Store response bytes into a response array */
-    int responseSize = SunriseSerial.available();
-    uint8_t response [responseSize];
+    responseSize = SunriseSerial.available();
+    response[responseSize];
   
     for(int n = 0 ; n < responseSize ; n++) {
       response[n] = SunriseSerial.read();
@@ -355,7 +354,6 @@ void read_holding_registers(uint8_t comAddr, uint16_t regAddr, uint16_t numReg, 
     slot = slot + 2;
   }
 }
-
 
 /**
   * @brief  Reads multiple input registers.
@@ -402,7 +400,7 @@ void read_input_registers(uint8_t comAddr, uint16_t regAddr, uint16_t numReg, ui
   
   /* Store response bytes into a response array */
   int responseSize = SunriseSerial.available();
-  uint8_t response [responseSize];
+  uint8_t response[responseSize];
 
   for(int n = 0 ; n < responseSize ; n++) {
     response[n] = SunriseSerial.read();
@@ -419,8 +417,8 @@ void read_input_registers(uint8_t comAddr, uint16_t regAddr, uint16_t numReg, ui
     SunriseSerial.write(modbusSerialPDU, sizeof(modbusSerialPDU));
 
     /* Store response bytes into a response array */
-    int responseSize = SunriseSerial.available();
-    uint8_t response [responseSize];
+    responseSize = SunriseSerial.available();
+    response[responseSize];
   
     for(int n = 0 ; n < responseSize ; n++) {
       response[n] = SunriseSerial.read();
@@ -467,37 +465,31 @@ void write_multiple_registers(uint8_t comAddr, uint8_t regAddr, uint16_t numReg,
   uint8_t writeValHi;
   uint8_t writeValLo;
   uint8_t modbusPDU[7 + numBytes];
+
+  /* Assign the first 7 bytes to the request array */
+  modbusPDU[0] = comAddr;
+  modbusPDU[1] = funCode;
+  modbusPDU[2] = regAddrHi;
+  modbusPDU[3] = regAddrLo;
+  modbusPDU[4] = numRegHi;
+  modbusPDU[5] = numRegLo;
+  modbusPDU[6] = numBytes;
+
+  /* Convert the words to be written into 2 bytes and assign them to the request array */
   int counter = 7;
-  for(int n = 0 ; n < 7 + numBytes ; n++) {
-    if(n == 0) {
-      modbusPDU[n] = comAddr;
-    }else if(n == 1) {
-      modbusPDU[n] = funCode;
-    }else if(n == 2) {
-      modbusPDU[n] = regAddrHi;
-    }else if(n == 3) {
-      modbusPDU[n] = regAddrLo;
-    }else if(n == 4) {
-      modbusPDU[n] = numRegHi;
-    }else if(n == 5) {
-      modbusPDU[n] = numRegLo;
-    }else if(n == 6) {
-      modbusPDU[n] = numBytes;
-    }else{
-      modbusPDU[counter] = (writeVal[n - 7] >> 8);
-      modbusPDU[counter+1] = writeVal[n - 7] & 0xFF;
-      counter += 2;
-    }
+  for(int n = 0 ; n < numBytes ; n++) {
+    modbusPDU[counter] = (writeVal[n] >> 8);
+    modbusPDU[counter+1] = writeVal[n] & 0xFF;
+    counter += 2;
   }
-  
+
   /* Create CRC */
   uint16_t crc = _generate_crc(modbusPDU, sizeof(modbusPDU));
   uint8_t crcLo = crc & 0xFF;
   uint8_t crcHi = (crc >> 8);
 
-
   /* Request (HEX) */
-  uint8_t modbusSerialPDU[sizeof(modbusPDU)+2];
+  uint8_t modbusSerialPDU[sizeof(modbusPDU) + 2];
   for(int n = 0 ; n < sizeof(modbusPDU) ; n++) {
     modbusSerialPDU[n] = modbusPDU[n];
   }
@@ -521,7 +513,7 @@ void write_multiple_registers(uint8_t comAddr, uint8_t regAddr, uint16_t numReg,
 
   /* Store response bytes into a response array */
   int responseSize = SunriseSerial.available();
-  uint8_t response [responseSize];
+  uint8_t response[responseSize];
   
   for(int n = 0 ; n < responseSize ; n++) {
     response[n] = SunriseSerial.read();
@@ -538,8 +530,8 @@ void write_multiple_registers(uint8_t comAddr, uint8_t regAddr, uint16_t numReg,
     SunriseSerial.write(modbusSerialPDU, sizeof(modbusSerialPDU));
 
     /* Store response bytes into a response array */
-    int responseSize = SunriseSerial.available();
-    uint8_t response [responseSize];
+    responseSize = SunriseSerial.available();
+    response[responseSize];
   
     for(int n = 0 ; n < responseSize ; n++) {
       response[n] = SunriseSerial.read();
@@ -591,7 +583,7 @@ void read_device_id(uint8_t comAddr, uint8_t objectId, char returnValue[]) {
   
   /* Store response bytes into a response array */
   int responseSize = SunriseSerial.available();
-  uint8_t response [responseSize];
+  uint8_t response[responseSize];
 
   for(int n = 0 ; n < responseSize ; n++) {
     response[n] = SunriseSerial.read();
@@ -608,8 +600,8 @@ void read_device_id(uint8_t comAddr, uint8_t objectId, char returnValue[]) {
     SunriseSerial.write(modbusSerialPDU, sizeof(modbusSerialPDU));
 
     /* Store response bytes into a response array */
-    int responseSize = SunriseSerial.available();
-    uint8_t response [responseSize];
+    responseSize = SunriseSerial.available();
+    response[responseSize];
   
     for(int n = 0 ; n < responseSize ; n++) {
       response[n] = SunriseSerial.read();
