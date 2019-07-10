@@ -7,8 +7,8 @@
  * @details     Tested on Arduino Mega 2560
  *              
  * @author      William Sandkvist
- * @version     0.09
- * @date        2019-06-25
+ * @version     0.10
+ * @date        2019-07-10
  *
  *******************************************************************************
  */
@@ -27,249 +27,17 @@ const int       MIN_READ_PERIOD_MS      = 2000;
 const uint8_t   SUNRISE_ADDR            = 0x68;
 
 /* 
- * Delay when waiting for responses, in milliseconds.
+ * The delay when waiting for responses, in milliseconds.
  * Length based on the documentation, "Modbus on Senseair 
  * Sunrise", headline "1.3 Bus timing", page 4.
  */
 const int       WAIT                    = 180;
 
-/* Maximum attempts for a request */
-const int       MAX_ATTEMPTS            = 5;
-
-/* Variable for keeping track of failed attempts */
-int attempt = 0;
-
-/**
-  * @brief  Reads a holding register.
-  * 
-  * @param  comAddr: Communication address
-  *         regAddr: Register address
-  * @retval Register value
-  */
-uint16_t holding_register_read(uint8_t comAddr, uint16_t regAddr) {
-  /* Return variable */
-  uint16_t returnValue = 0;
-
-  /* PDU variables */
-  uint8_t funCode = 0x03;
-
-  uint8_t regAddrHi = (regAddr >> 8);
-  uint8_t regAddrLo = regAddr & 0xFF;
-  
-  uint8_t numRegHi = 0x00;
-  uint8_t numRegLo = 0x01;
-
-  /* Define Modbus PDU */
-  uint8_t modbusPDU[] = {comAddr, funCode, regAddrHi, regAddrLo, numRegHi, numRegLo};
-
-  /* Create CRC */
-  uint16_t crc = _generate_crc(modbusPDU, sizeof(modbusPDU));
-  uint8_t crcLo = crc & 0xFF;
-  uint8_t crcHi = (crc >> 8);
-
-  /* Request (HEX) */
-  uint8_t modbusSerialPDU[] = {comAddr, funCode, regAddrHi, regAddrLo, numRegHi, numRegLo, crcLo, crcHi};
-  SunriseSerial.write(modbusSerialPDU, sizeof(modbusSerialPDU));
-
-  /* Wait for response */
-  while(SunriseSerial.available() <= 0) {
-    delay(WAIT);
-    attempt++;
-    if(attempt >= MAX_ATTEMPTS) {
-      Serial.println("Response time-out");
-      return returnValue; 
-    }
-  }
-  
-  /* Store response bytes into a response array */
-  int responseSize = SunriseSerial.available();
-  uint8_t response[responseSize];
-
-  for(int n = 0 ; n < responseSize ; n++) {
-    response[n] = SunriseSerial.read();
-  }
-
-  /* Check the response for errors and exceptions */
-  while(_handler(response, funCode, responseSize) < 0) {
-    attempt++;
-    if(attempt >= MAX_ATTEMPTS) {
-      Serial.println("Reached max attempts. Request cancelled.");
-      return returnValue;
-    }
-    /* Re-send PDU */
-    SunriseSerial.write(modbusSerialPDU, sizeof(modbusSerialPDU));
-
-    /* Store response bytes into a response array */
-    responseSize = SunriseSerial.available();
-    response[responseSize];
-  
-    for(int n = 0 ; n < responseSize ; n++) {
-      response[n] = SunriseSerial.read();
-    }
-  }
-
-  /* Reset attempt on success */
-  attempt = 0;
-
-  /* Combine the bytes containing the requested values into a word */
-  returnValue = ((int16_t)(int8_t) response[3] << 8) | (uint16_t)response[4];
-
-  return returnValue;
-}
-
-/**
-  * @brief  Reads an input register.
-  * 
-  * @param  comAddr: Communication address
-  *         regAddr: Register address
-  * @retval Register value
-  */
-uint16_t input_register_read(uint8_t comAddr, uint16_t regAddr) {
-  /* Return variable */
-  uint16_t returnValue = 0;
-
-  /* PDU variables */
-  uint8_t funCode = 0x04;
-
-  uint8_t regAddrHi = (regAddr >> 8);
-  uint8_t regAddrLo = regAddr & 0xFF;
-  
-  uint8_t numRegHi = 0x00;
-  uint8_t numRegLo = 0x01;
-
-  /* Define Modbus PDU */
-  uint8_t modbusPDU[] = {comAddr, funCode, regAddrHi, regAddrLo, numRegHi, numRegLo};
-
-  /* Create CRC */
-  uint16_t crc = _generate_crc(modbusPDU, sizeof(modbusPDU));
-  uint8_t crcLo = crc & 0xFF;
-  uint8_t crcHi = (crc >> 8);
-
-  /* Request (HEX) */
-  uint8_t modbusSerialPDU[] = {comAddr, funCode, regAddrHi, regAddr, numRegHi, numRegLo, crcLo, crcHi};
-  SunriseSerial.write(modbusSerialPDU, sizeof(modbusSerialPDU));
-
-  /* Wait for response */
-  while(SunriseSerial.available() <= 0) {
-    delay(WAIT);
-    attempt++;
-    if(attempt >= MAX_ATTEMPTS) {
-      Serial.println("Response time-out");
-      return returnValue; 
-    }
-  }
-
-  /* Store response bytes into a response array */
-  int responseSize = SunriseSerial.available();
-  uint8_t response[responseSize];
-
-  for(int n = 0 ; n < responseSize ; n++) {
-    response[n] = SunriseSerial.read();
-  }
-
-  /* Check the response for errors and exceptions */
-  while(_handler(response, funCode, responseSize) < 0) {
-    attempt++;
-    if(attempt >= MAX_ATTEMPTS) {
-      Serial.println("Reached max attempts. Request cancelled.");
-      return returnValue;
-    }
-    /* Re-send PDU */
-    SunriseSerial.write(modbusSerialPDU, sizeof(modbusSerialPDU));
-
-    /* Store response bytes into a response array */
-    responseSize = SunriseSerial.available();
-    response[responseSize];
-  
-    for(int n = 0 ; n < responseSize ; n++) {
-      response[n] = SunriseSerial.read();
-    }
-  }
-
-  /* Reset attempt on success */
-  attempt = 0;
-
-  /* Combine the bytes containing the requested values into a word */
-  returnValue = ((int16_t)(int8_t) response[3] << 8) | (uint16_t)response[4];
-
-  return returnValue;
-}
-
-/**
-  * @brief  Writes a value to a register
-  * 
-  * @param  comAddr:  Communication address
-  *         regAddr:  Register address
-  *         writeVal: The value to write to the register
-  * @retval None
-  */
-void write_to_register(uint8_t comAddr, uint8_t regAddr, uint16_t writeVal) {
-  /* PDU variables */
-  uint8_t funCode = 0x10;
-
-  uint8_t regAddrHi = (regAddr >> 8);
-  uint8_t regAddrLo = regAddr & 0xFF;
-  
-  uint8_t numRegHi = 0x00;
-  uint8_t numRegLo = 0x01;
-
-  uint8_t numBytes = 0x02;
-  
-  uint8_t writeValHi = (writeVal >> 8);
-  uint8_t writeValLo = writeVal & 0xFF;
-
-  /* Define Modbus PDU */
-  uint8_t modbusPDU[] = {comAddr, funCode, regAddrHi, regAddrLo, numRegHi, numRegLo, numBytes, writeValHi, writeValLo};
-
-  /* Create CRC */
-  uint16_t crc = _generate_crc(modbusPDU, sizeof(modbusPDU));
-  uint8_t crcLo = crc & 0xFF;
-  uint8_t crcHi = (crc >> 8);
-
-  /* Request (HEX) */
-  uint8_t modbusSerialPDU[] = {comAddr, funCode, regAddrHi, regAddrLo, numRegHi, numRegLo, numBytes, writeValHi, writeValLo, crcLo, crcHi};
-  SunriseSerial.write(modbusSerialPDU, sizeof(modbusSerialPDU));
-
-  /* Wait for response */
-  while(SunriseSerial.available() <= 0) {
-    delay(WAIT);
-    attempt++;
-    if(attempt >= MAX_ATTEMPTS) {
-      Serial.println("Response time-out");
-      return; 
-    }
-  }
-
-  /* Store response bytes into a response array */
-  int responseSize = SunriseSerial.available();
-  uint8_t response[responseSize];
-  
-  for(int n = 0 ; n < responseSize ; n++) {
-    response[n] = SunriseSerial.read();
-  }
-
-  /* Check the response for errors and exceptions */
-  while(_handler(response, funCode, responseSize) < 0) {
-    attempt++;
-    if(attempt >= MAX_ATTEMPTS) {
-      Serial.println("Reached max attempts. Request cancelled.");
-      return;
-    }
-    /* Re-send PDU */
-    SunriseSerial.write(modbusSerialPDU, sizeof(modbusSerialPDU));
-
-    /* Store response bytes into a response array */
-    responseSize = SunriseSerial.available();
-    response[responseSize];
-
-    for(int n = 0 ; n < responseSize ; n++) {
-      response[n] = SunriseSerial.read();
-    }
-  }
-
-  /* Reset attempt on success */
-  attempt = 0;
-}
+/* Arrays for request, responses and register values */
+uint8_t request[62];
+uint8_t response[62];
+uint16_t values[62];
+char device[12];
 
 /**
   * @brief  Reads multiple holding registers.
@@ -282,77 +50,77 @@ void write_to_register(uint8_t comAddr, uint8_t regAddr, uint16_t writeVal) {
   *         passed to the function as an argument.
   * @retval None
   */
-void read_holding_registers(uint8_t comAddr, uint16_t regAddr, uint16_t numReg, uint16_t returnValues[]) {
+void read_holding_registers(uint8_t comAddr, uint16_t regAddr, uint16_t numReg) {
   /* PDU variables */
   uint8_t funCode = 0x03;
-
+  
   uint8_t regAddrHi = (regAddr >> 8);
   uint8_t regAddrLo = regAddr & 0xFF;
-  
+    
   uint8_t numRegHi = (numReg >> 8);
   uint8_t numRegLo = numReg & 0xFF;
+  
 
   /* Define Modbus PDU */
-  uint8_t modbusPDU[] = {comAddr, funCode, regAddrHi, regAddrLo, numRegHi, numRegLo};
+  request[0] = comAddr;
+  request[1] = funCode;
+  request[2] = regAddrHi;
+  request[3] = regAddrLo;
+  request[4] = numRegHi;
+  request[5] = numRegLo;
 
   /* Create CRC */
-  uint16_t crc = _generate_crc(modbusPDU, sizeof(modbusPDU));
+  uint16_t crc = _generate_crc(request, 6);
   uint8_t crcLo = crc & 0xFF;
   uint8_t crcHi = (crc >> 8);
 
-  /* Request (HEX) */
-  uint8_t modbusSerialPDU[] = {comAddr, funCode, regAddrHi, regAddrLo, numRegHi, numRegLo, crcLo, crcHi};
-  SunriseSerial.write(modbusSerialPDU, sizeof(modbusSerialPDU));
+  request[6] = crcLo;
+  request[7] = crcHi;
+
+  /* Send request */
+  SunriseSerial.write(request, 8);
+
+  /* Number of bytes to wait for */
+  int waitBytes = 5 + (numReg * 2);
 
   /* Wait for response */
-  while(SunriseSerial.available() <= 0) {
-    delay(WAIT);
-    attempt++;
-    if(attempt >= MAX_ATTEMPTS) {
+  int counter = 0;
+
+  while(SunriseSerial.available() < waitBytes) {
+    delay(1);
+    counter++;
+    if(counter >= WAIT) {
       Serial.println("Response time-out");
+      _clear_array();
       return; 
     }
   }
   
   /* Store response bytes into a response array */
   int responseSize = SunriseSerial.available();
-  uint8_t response[responseSize];
 
   for(int n = 0 ; n < responseSize ; n++) {
     response[n] = SunriseSerial.read();
   }
 
   /* Check the response for errors and exceptions */
-  while(_handler(response, funCode, responseSize) < 0) {
-    attempt++;
-    if(attempt >= MAX_ATTEMPTS) {
-      Serial.println("Reached max attempts. Request cancelled.");
-      return;
-    }
-    /* Re-send PDU */
-    SunriseSerial.write(modbusSerialPDU, sizeof(modbusSerialPDU));
-
-    /* Store response bytes into a response array */
-    responseSize = SunriseSerial.available();
-    response[responseSize];
-  
-    for(int n = 0 ; n < responseSize ; n++) {
-      response[n] = SunriseSerial.read();
-    }
+  if(_handler(response, funCode, responseSize) < 0) {
+    _clear_array();
+    return;
   }
 
-  /* Reset attempt on success */
-  attempt = 0;
-
   /* Combine the bytes containing the requested values into words */
-  int counter = 0;
+  counter = 0;
   int slot = 3;
     while(counter < ((responseSize - 5)/2)) {
-    returnValues[counter] = ((int16_t)(int8_t) response[slot] << 8) | (uint16_t)response[slot + 1];
+    values[counter] = ((int16_t)(int8_t) response[slot] << 8) | (uint16_t)response[slot + 1];
 
     counter++;
     slot = slot + 2;
   }
+
+  /* Clear the request and response arrays */
+  _clear_array();
 }
 
 /**
@@ -366,77 +134,77 @@ void read_holding_registers(uint8_t comAddr, uint16_t regAddr, uint16_t numReg, 
   *         passed to the function as an argument.
   * @retval None
   */
-void read_input_registers(uint8_t comAddr, uint16_t regAddr, uint16_t numReg, uint16_t returnValues[]) {
+void read_input_registers(uint8_t comAddr, uint16_t regAddr, uint16_t numReg) {
   /* PDU variables */
   uint8_t funCode = 0x04;
-
+  
   uint8_t regAddrHi = (regAddr >> 8);
   uint8_t regAddrLo = regAddr & 0xFF;
-  
+    
   uint8_t numRegHi = (numReg >> 8);
   uint8_t numRegLo = numReg & 0xFF;
+  
 
   /* Define Modbus PDU */
-  uint8_t modbusPDU[] = {comAddr, funCode, regAddrHi, regAddrLo, numRegHi, numRegLo};
+  request[0] = comAddr;
+  request[1] = funCode;
+  request[2] = regAddrHi;
+  request[3] = regAddrLo;
+  request[4] = numRegHi;
+  request[5] = numRegLo;
 
   /* Create CRC */
-  uint16_t crc = _generate_crc(modbusPDU, sizeof(modbusPDU));
+  uint16_t crc = _generate_crc(request, 6);
   uint8_t crcLo = crc & 0xFF;
   uint8_t crcHi = (crc >> 8);
 
-  /* Request (HEX) */
-  uint8_t modbusSerialPDU[] = {comAddr, funCode, regAddrHi, regAddrLo, numRegHi, numRegLo, crcLo, crcHi};
-  SunriseSerial.write(modbusSerialPDU, sizeof(modbusSerialPDU));
+  request[6] = crcLo;
+  request[7] = crcHi;
+
+  /* Send request */
+  SunriseSerial.write(request, 8);
+
+  /* Number of bytes to wait for */
+  int waitBytes = 5 + (numReg * 2);
 
   /* Wait for response */
-  while(SunriseSerial.available() <= 0) {
-    delay(WAIT);
-    attempt++;
-    if(attempt >= MAX_ATTEMPTS) {
+  int counter = 0;
+
+  while(SunriseSerial.available() < waitBytes) {
+    delay(1);
+    counter++;
+    if(counter >= WAIT) {
       Serial.println("Response time-out");
+      _clear_array();
       return; 
     }
   }
   
   /* Store response bytes into a response array */
   int responseSize = SunriseSerial.available();
-  uint8_t response[responseSize];
 
   for(int n = 0 ; n < responseSize ; n++) {
     response[n] = SunriseSerial.read();
   }
 
   /* Check the response for errors and exceptions */
-  while(_handler(response, funCode, responseSize) < 0) {
-    attempt++;
-    if(attempt >= MAX_ATTEMPTS) {
-      Serial.println("Reached max attempts. Request cancelled.");
-      return;
-    }
-    /* Re-send PDU */
-    SunriseSerial.write(modbusSerialPDU, sizeof(modbusSerialPDU));
-
-    /* Store response bytes into a response array */
-    responseSize = SunriseSerial.available();
-    response[responseSize];
-  
-    for(int n = 0 ; n < responseSize ; n++) {
-      response[n] = SunriseSerial.read();
-    }
+  if(_handler(response, funCode, responseSize) < 0) {
+    _clear_array();
+    return;
   }
 
-  /* Reset attempt on success */
-  attempt = 0;
-
   /* Combine the bytes containing the requested values into words */
-  int counter = 0;
+  counter = 0;
   int slot = 3;
     while(counter < ((responseSize - 5)/2)) {
-    returnValues[counter] = ((int16_t)(int8_t) response[slot] << 8) | (uint16_t)response[slot + 1];
+    values[counter] = ((int16_t)(int8_t) response[slot] << 8) | (uint16_t)response[slot + 1];
 
     counter++;
     slot = slot + 2;
   }
+
+  /* Clear the request and response arrays */
+  _clear_array();
 }
 
 /**
@@ -466,80 +234,66 @@ void write_multiple_registers(uint8_t comAddr, uint8_t regAddr, uint16_t numReg,
   uint8_t writeValLo;
   uint8_t modbusPDU[7 + numBytes];
 
+  int requestSize = 7 + numBytes;
+
   /* Assign the first 7 bytes to the request array */
-  modbusPDU[0] = comAddr;
-  modbusPDU[1] = funCode;
-  modbusPDU[2] = regAddrHi;
-  modbusPDU[3] = regAddrLo;
-  modbusPDU[4] = numRegHi;
-  modbusPDU[5] = numRegLo;
-  modbusPDU[6] = numBytes;
+  request[0] = comAddr;
+  request[1] = funCode;
+  request[2] = regAddrHi;
+  request[3] = regAddrLo;
+  request[4] = numRegHi;
+  request[5] = numRegLo;
+  request[6] = numBytes;
 
   /* Convert the words to be written into 2 bytes and assign them to the request array */
   int counter = 7;
   for(int n = 0 ; n < numBytes ; n++) {
-    modbusPDU[counter] = (writeVal[n] >> 8);
-    modbusPDU[counter+1] = writeVal[n] & 0xFF;
+    request[counter] = (writeVal[n] >> 8);
+    request[counter+1] = writeVal[n] & 0xFF;
     counter += 2;
   }
 
   /* Create CRC */
-  uint16_t crc = _generate_crc(modbusPDU, sizeof(modbusPDU));
+  uint16_t crc = _generate_crc(request, requestSize);
   uint8_t crcLo = crc & 0xFF;
   uint8_t crcHi = (crc >> 8);
 
   /* Request (HEX) */
-  uint8_t modbusSerialPDU[sizeof(modbusPDU) + 2];
-  for(int n = 0 ; n < sizeof(modbusPDU) ; n++) {
-    modbusSerialPDU[n] = modbusPDU[n];
-  }
-  modbusSerialPDU[sizeof(modbusPDU) + 1] = crcHi;
-  modbusSerialPDU[sizeof(modbusPDU)] = crcLo;
+  request[requestSize] = crcLo;
+  request[requestSize+1] = crcHi;
 
-  SunriseSerial.write(modbusSerialPDU, sizeof(modbusSerialPDU));
+  requestSize +=2;
+
+  SunriseSerial.write(request, requestSize);
+
+  /* Number of bytes to wait for */
+  int waitBytes = 8;
 
   /* Wait for response */
-  while(SunriseSerial.available() <= 0) {
-    delay(WAIT);
-    attempt++;
-    if(attempt >= MAX_ATTEMPTS) {
+  counter = 0;
+
+  while(SunriseSerial.available() < waitBytes) {
+    delay(1);
+    counter++;
+    if(counter >= WAIT) {
       Serial.println("Response time-out");
+      _clear_array();
       return; 
     }
   }
 
-  /* Reset attempt on success */
-  attempt = 0;
-
   /* Store response bytes into a response array */
   int responseSize = SunriseSerial.available();
-  uint8_t response[responseSize];
   
   for(int n = 0 ; n < responseSize ; n++) {
     response[n] = SunriseSerial.read();
   }
 
   /* Check the response for errors and exceptions */
-  while(_handler(response, funCode, responseSize) < 0) {
-    attempt++;
-    if(attempt >= MAX_ATTEMPTS) {
-      Serial.println("Reached max attempts. Request cancelled.");
-      return;
-    }
-    /* Re-send PDU */
-    SunriseSerial.write(modbusSerialPDU, sizeof(modbusSerialPDU));
-
-    /* Store response bytes into a response array */
-    responseSize = SunriseSerial.available();
-    response[responseSize];
-  
-    for(int n = 0 ; n < responseSize ; n++) {
-      response[n] = SunriseSerial.read();
-    }
+  if(_handler(response, funCode, responseSize) < 0) {
+    _clear_array();
+    return;
   }
-
-  /* Reset attempt on success */
-  attempt = 0;
 }
 
 /**
@@ -551,7 +305,7 @@ void write_multiple_registers(uint8_t comAddr, uint8_t regAddr, uint16_t numReg,
   *         returnValues: Array of values to be written to the registers        
   * @retval None
   */
-void read_device_id(uint8_t comAddr, uint8_t objectId, char returnValue[]) {
+void read_device_id(uint8_t comAddr, uint8_t objId) {
   /* PDU variables */
   uint8_t funCode = 0x2B;
 
@@ -560,67 +314,74 @@ void read_device_id(uint8_t comAddr, uint8_t objectId, char returnValue[]) {
   uint8_t idCode = 0x04;
 
   /* Define Modbus PDU */
-  uint8_t modbusPDU[] = {comAddr, funCode, meiType, idCode, objectId};
+  request[0] = comAddr;
+  request[1] = funCode;
+  request[2] = meiType;
+  request[3] = idCode;
+  request[4] = objId;
 
   /* Create CRC */
-  uint16_t crc = _generate_crc(modbusPDU, sizeof(modbusPDU));
+  uint16_t crc = _generate_crc(request, 5);
   uint8_t crcLo = crc & 0xFF;
   uint8_t crcHi = (crc >> 8);
 
-  /* Request (HEX) */
-  uint8_t modbusSerialPDU[] = {comAddr, funCode, meiType, idCode, objectId, crcLo, crcHi};
-  SunriseSerial.write(modbusSerialPDU, sizeof(modbusSerialPDU));
+  request[5] = crcLo;
+  request[6] = crcHi;
+  
+  /* Send request */
+  SunriseSerial.write(request, 7);
+
+  /* Number of bytes to wait for */
+  int objLen = 0;
+  if(objId == 0) {
+    objLen = 8; // Should be 11 according to documentation, but is only 8 ("Senseair" instead of "Senseair AB")
+  }else if(objId == 1) {
+    objLen = 7;
+  }else if(objId == 2) {
+    objLen = 4;
+  }
+  int waitBytes = 12 + objLen;
 
   /* Wait for response */
-  while(SunriseSerial.available() <= 0) {
-    delay(WAIT);
-    attempt++;
-    if(attempt >= MAX_ATTEMPTS) {
+  int counter = 0;
+
+  while(SunriseSerial.available() < waitBytes) {
+    delay(1);
+    counter++;
+    if(counter >= WAIT) {
       Serial.println("Response time-out");
+      _clear_array();
       return; 
     }
   }
-  
+
   /* Store response bytes into a response array */
   int responseSize = SunriseSerial.available();
-  uint8_t response[responseSize];
 
   for(int n = 0 ; n < responseSize ; n++) {
     response[n] = SunriseSerial.read();
   }
   
   /* Check the response for errors and exceptions */
-  while(_handler(response, funCode, responseSize) < 0) {
-    attempt++;
-    if(attempt >= MAX_ATTEMPTS) {
-      Serial.println("Reached max attempts. Request cancelled.");
-      return;
-    }
-    /* Re-send PDU */
-    SunriseSerial.write(modbusSerialPDU, sizeof(modbusSerialPDU));
-
-    /* Store response bytes into a response array */
-    responseSize = SunriseSerial.available();
-    response[responseSize];
-  
-    for(int n = 0 ; n < responseSize ; n++) {
-      response[n] = SunriseSerial.read();
-    }
+  if(_handler(response, funCode, responseSize) < 0) {
+    _clear_array();
+    return;
   }
 
-  /* Reset attempt on success */
-  attempt = 0;
-
   /* Combine the bytes containing the requested values into words */
-  int counter = 0;
+  int objLength = response[9];
+  counter = 0;
   int slot = 10;
-    while(counter < response[9]) {
-    returnValue[counter] = response[slot];
+    while(counter < objLength) {
+    device[counter] = response[slot];
 
     counter++;
     slot++;
   }
-  returnValue[counter] = '\0';
+  device[counter] = '\0';
+  
+  /* Clear the request and response arrays */
+  _clear_array;
 }
 
 /**
@@ -711,6 +472,14 @@ uint16_t _generate_crc(uint8_t pdu[], int len) {
   return crc;  
 }
 
+/**/
+void _clear_array() {
+  for (int n = 0 ; n < 62 ; n++) {
+    request[n] = 0;
+    response[n] = 0;
+  }
+}
+
 /**
   * @brief  This function runs once at the start.
   *
@@ -736,14 +505,34 @@ void setup() {
   read_sensor_config(SUNRISE_ADDR);
   Serial.println(' ');
 
-  delay(MIN_READ_PERIOD_MS);
-
-
-  /* Change measurement mode to continuous */
-  change_measurement_mode(SUNRISE_ADDR);
-
   /* Change measurement configs */
   //change_measurement_config(SUNRISE_ADDR);
+  //Serial.println(' ');
+  
+  delay(MIN_READ_PERIOD_MS);
+}
+
+/**
+  * @brief  Reads and prints the sensor's device identification.
+  * 
+  * @param  target: The sensor's communication address.
+  * @note   This example shows a simple way to read and print the 
+  *         sensor's Vendor Name, ProductCode and MajorMinorRevision, 
+  *         through one read request for each object.
+  * @retval None
+  */
+void read_sensor_id(uint8_t target) {
+  /* Vendor Name */
+  read_device_id(target, 0);
+  Serial.println(device);
+  
+  /* ProductCode */
+  read_device_id(target, 1);
+  Serial.println(device);
+  
+  /* MajorMinorRevision */
+  read_device_id(target, 2);
+  Serial.println(device);
 }
 
 /**
@@ -758,11 +547,10 @@ void setup() {
   */
 void read_sensor_config(uint8_t target) {
   /* Function variables */
-  uint16_t regAddrMode = 0x000A;
+  uint16_t regAddr = 0x000A;
   uint16_t numReg = 0x0003;
-  
-  uint16_t values[numReg];
-  read_holding_registers(target, regAddrMode, numReg, values);
+
+  read_holding_registers(target, regAddr, numReg);
 
   uint16_t measMode = values[0];
   uint16_t measPeriod = values[1];
@@ -796,51 +584,18 @@ void read_sensor_config(uint8_t target) {
   */
 void read_sensor_measurements(uint8_t target) {
   /* Function variables */
-  uint16_t regAddrCo2 = 0x0003;
-  uint16_t regAddrEStatus = 0x0000;
+  uint16_t regAddr = 0x0000;
+  uint16_t numReg = 0x0004;
 
-  /* Read CO2 value */
-  uint16_t co2Value = input_register_read(target, regAddrCo2);
+  /* Read values */
+  read_input_registers(target, regAddr, numReg);
   Serial.print("CO2: ");
-  Serial.print(co2Value);
+  Serial.print(values[3]);
   Serial.println(" ppm");
 
   /* Read error status */
-  uint16_t eStatus = input_register_read(target, regAddrEStatus);
   Serial.print("Error Status: 0x");
-  Serial.println(eStatus, HEX);
-}
-
-/**
-  * @brief  Reads the sensor's current measurement mode, and if
-  *         it's single mode (register value 1) changes it to 
-  *         contiuous mode (register value 0).
-  * 
-  * @param  target: The sensor's communication address
-  * @note   This example shows a simple way to change the sensor's
-  *         measurement mode from single to contiuous, using one 
-  *         request for reading the current measurement mode and
-  *         another write request if it has to be changed.
-  *         
-  *         The sensor has to be manually restarted after the
-  *         change.
-  * @retval None
-  */
-void change_measurement_mode(uint8_t target) {
-  /* Function variables */
-  uint16_t regAddr = 0x000A;
-  uint16_t continuous = 0x0000;
-  uint16_t single = 0x0001;
-  
-  /*if(holding_register_read(target, regAddr) == continuous) {
-    write_to_register(target, regAddr, (uint16_t)single);
-    Serial.println("Measurement mode changed to Single Mode");
-    
-  }else */if(holding_register_read(target, regAddr) == single) {
-    write_to_register(target, regAddr, (uint16_t)continuous);
-    Serial.println("Measurement mode changed to Continuous Mode");
-    Serial.println("Sensor restart is required to apply changes");
-  } 
+  Serial.println(values[0], HEX);
 }
 
 /**
@@ -859,14 +614,9 @@ void change_measurement_mode(uint8_t target) {
   */
 void change_measurement_config(uint8_t target) {
   /* Function variables */
-  uint16_t regAddrMode = 0x000A;
-  uint16_t regAddrPeriod = 0x000B;
-  uint16_t regAddrSamples = 0x000C;
+  uint16_t regAddr = 0x000B;
 
-  uint16_t numReg = 0x0003;
-
-  uint16_t continuous = 0x0000;
-  uint16_t single = 0x0001;
+  uint16_t numReg = 0x0002;
 
   uint16_t periodLong = 0x0004;
   uint16_t periodShort =0x0002;
@@ -874,64 +624,30 @@ void change_measurement_config(uint8_t target) {
   uint16_t samplesMany = 0x0010;
   uint16_t samplesFew =0x0008;
 
-  uint16_t input[3];
+  uint16_t input[2];
+
+  read_holding_registers(target, regAddr, numReg);
 
   /* Check current values and change input accordingly */
-  if(holding_register_read(target, regAddrMode) == continuous) {
-    input[0] = single;
-    Serial.println("Measurement mode changed to Single Mode");
-    
-  }else if(holding_register_read(target, regAddrMode) == single) {
-    input[0] = continuous;
-    Serial.println("Measurement mode changed to Continuous Mode");
-  } 
-
-  if(holding_register_read(target, regAddrPeriod) == periodShort) {
-    input[1] = periodLong;
+  if(values[0] == periodShort) {
+    input[0] = periodLong;
     Serial.println("Measurement period changed to 4 sec");
-  }else if(holding_register_read(target, regAddrPeriod) == periodLong) {
-    input[1] = periodShort;
+  }else if(values[0] == periodLong) {
+    input[0] = periodShort;
     Serial.println("Measurement period changed to 2 sec");
   }
 
-  if(holding_register_read(target, regAddrSamples) == samplesFew) {
-    input[2] = samplesMany;
+  if(values[1] == samplesFew) {
+    input[1] = samplesMany;
     Serial.println("Measurement samples changed to 16");
-  }else if(holding_register_read(target, regAddrSamples) == samplesMany) {
-    input[2] = samplesFew;
+  }else if(values[1] == samplesMany) {
+    input[1] = samplesFew;
     Serial.println("Measurement samples changed to 8");
   }
 
   /* Send a request to change the values */
-  write_multiple_registers(target, regAddrMode, numReg, input);
+  write_multiple_registers(target, regAddr, numReg, input);
   Serial.println("Sensor restart is required to apply changes");
-}
-
-/**
-  * @brief  Reads and prints the sensor's device identification.
-  * 
-  * @param  target: The sensor's communication address.
-  * @note   This example shows a simple way to read and print the 
-  *         sensor's Vendor Name, ProductCode and MajorMinorRevision, 
-  *         through one read request for each object.
-  * @retval None
-  */
-void read_sensor_id(uint8_t target) {
-  /* Array for Vendor Name */
-  char value1[9];
-  /* Array for ProductCode */
-  char value2[8];
-  /* Array for MajorMinorRevision */
-  char value3[4];
-
-  /* Reads the values */
-  read_device_id(target, 0, value1);
-  read_device_id(target, 1, value2);
-  read_device_id(target, 2, value3);
-  /* Prints the values */
-  Serial.println(value1);
-  Serial.println(value2);
-  Serial.println(value3);
 }
 
 /**
@@ -943,14 +659,13 @@ void read_sensor_id(uint8_t target) {
   */
 void loop() {
   static int pin_value = HIGH;
-  
-  /* Delay between readings */
-  Serial.println("Waiting...");
-  delay(MIN_READ_PERIOD_MS);
 
   /* Read measurements */
   read_sensor_measurements(SUNRISE_ADDR);
-  Serial.println(' ');
+
+  /* Delay between readings */
+  Serial.println("Waiting...\n");
+  delay(MIN_READ_PERIOD_MS);
   
   /* Indicate working state */
   digitalWrite(LED_BUILTIN, pin_value);
