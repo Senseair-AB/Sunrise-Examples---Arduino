@@ -91,7 +91,6 @@ void read_holding_registers(uint8_t comAddr, uint16_t regAddr, uint16_t numReg) 
     counter++;
     if(counter >= WAIT) {
       Serial.println("Response time-out");
-      _clear_array();
       return; 
     }
   }
@@ -105,7 +104,6 @@ void read_holding_registers(uint8_t comAddr, uint16_t regAddr, uint16_t numReg) 
 
   /* Check the response for errors and exceptions */
   if(_handler(response, funCode, responseSize) < 0) {
-    _clear_array();
     return;
   }
 
@@ -118,9 +116,6 @@ void read_holding_registers(uint8_t comAddr, uint16_t regAddr, uint16_t numReg) 
     counter++;
     slot = slot + 2;
   }
-
-  /* Clear the request and response arrays */
-  _clear_array();
 }
 
 /**
@@ -175,7 +170,6 @@ void read_input_registers(uint8_t comAddr, uint16_t regAddr, uint16_t numReg) {
     counter++;
     if(counter >= WAIT) {
       Serial.println("Response time-out");
-      _clear_array();
       return; 
     }
   }
@@ -189,7 +183,6 @@ void read_input_registers(uint8_t comAddr, uint16_t regAddr, uint16_t numReg) {
 
   /* Check the response for errors and exceptions */
   if(_handler(response, funCode, responseSize) < 0) {
-    _clear_array();
     return;
   }
 
@@ -202,9 +195,6 @@ void read_input_registers(uint8_t comAddr, uint16_t regAddr, uint16_t numReg) {
     counter++;
     slot = slot + 2;
   }
-
-  /* Clear the request and response arrays */
-  _clear_array();
 }
 
 /**
@@ -277,7 +267,6 @@ void write_multiple_registers(uint8_t comAddr, uint8_t regAddr, uint16_t numReg,
     counter++;
     if(counter >= WAIT) {
       Serial.println("Response time-out");
-      _clear_array();
       return; 
     }
   }
@@ -291,7 +280,6 @@ void write_multiple_registers(uint8_t comAddr, uint8_t regAddr, uint16_t numReg,
 
   /* Check the response for errors and exceptions */
   if(_handler(response, funCode, responseSize) < 0) {
-    _clear_array();
     return;
   }
 }
@@ -350,7 +338,6 @@ void read_device_id(uint8_t comAddr, uint8_t objId) {
     counter++;
     if(counter >= WAIT) {
       Serial.println("Response time-out");
-      _clear_array();
       return; 
     }
   }
@@ -364,7 +351,6 @@ void read_device_id(uint8_t comAddr, uint8_t objId) {
   
   /* Check the response for errors and exceptions */
   if(_handler(response, funCode, responseSize) < 0) {
-    _clear_array();
     return;
   }
 
@@ -379,9 +365,6 @@ void read_device_id(uint8_t comAddr, uint8_t objId) {
     slot++;
   }
   device[counter] = '\0';
-  
-  /* Clear the request and response arrays */
-  _clear_array;
 }
 
 /**
@@ -472,14 +455,6 @@ uint16_t _generate_crc(uint8_t pdu[], int len) {
   return crc;  
 }
 
-/**/
-void _clear_array() {
-  for (int n = 0 ; n < 62 ; n++) {
-    request[n] = 0;
-    response[n] = 0;
-  }
-}
-
 /**
   * @brief  This function runs once at the start.
   *
@@ -524,14 +499,17 @@ void setup() {
 void read_sensor_id(uint8_t target) {
   /* Vendor Name */
   read_device_id(target, 0);
+  Serial.print("Vendor Name: ");
   Serial.println(device);
   
   /* ProductCode */
   read_device_id(target, 1);
+  Serial.print("ProductCode: ");
   Serial.println(device);
   
   /* MajorMinorRevision */
   read_device_id(target, 2);
+  Serial.print("MajorMinorRevision: ");
   Serial.println(device);
 }
 
@@ -567,35 +545,7 @@ void read_sensor_config(uint8_t target) {
 
   /* Read measurement samples */
   Serial.print("Measurement Samples: ");
-  Serial.println(measSamples);
-  
-}
-
-/**
-  * @brief  Reads and prints the sensor's current CO2 value and
-  *         error status.
-  * 
-  * @param  target: The sensor's communication address
-  * @note   This example shows a simple way to read the sensor's
-  *         CO2 measurement and error status, using two requests 
-  *         for reading the input registers where they are
-  *         located.
-  * @retval None
-  */
-void read_sensor_measurements(uint8_t target) {
-  /* Function variables */
-  uint16_t regAddr = 0x0000;
-  uint16_t numReg = 0x0004;
-
-  /* Read values */
-  read_input_registers(target, regAddr, numReg);
-  Serial.print("CO2: ");
-  Serial.print(values[3]);
-  Serial.println(" ppm");
-
-  /* Read error status */
-  Serial.print("Error Status: 0x");
-  Serial.println(values[0], HEX);
+  Serial.println(measSamples); 
 }
 
 /**
@@ -648,6 +598,33 @@ void change_measurement_config(uint8_t target) {
   /* Send a request to change the values */
   write_multiple_registers(target, regAddr, numReg, input);
   Serial.println("Sensor restart is required to apply changes");
+}
+
+/**
+  * @brief  Reads and prints the sensor's current CO2 value and
+  *         error status.
+  * 
+  * @param  target: The sensor's communication address
+  * @note   This example shows a simple way to read the sensor's
+  *         CO2 measurement and error status, using two requests 
+  *         for reading the input registers where they are
+  *         located.
+  * @retval None
+  */
+void read_sensor_measurements(uint8_t target) {
+  /* Function variables */
+  uint16_t regAddr = 0x0000;
+  uint16_t numReg = 0x0004;
+
+  /* Read values */
+  read_input_registers(target, regAddr, numReg);
+  Serial.print("CO2: ");
+  Serial.print(values[3]);
+  Serial.println(" ppm");
+
+  /* Read error status */
+  Serial.print("Error Status: 0x");
+  Serial.println(values[0], HEX);
 }
 
 /**
