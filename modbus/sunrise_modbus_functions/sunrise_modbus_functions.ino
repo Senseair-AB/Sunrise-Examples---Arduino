@@ -322,7 +322,7 @@ void read_device_id(uint8_t comAddr, uint8_t objId) {
   /* Number of bytes to wait for */
   int objLen = 0;
   if(objId == 0) {
-    objLen = 8; // Should be 11 according to documentation, but is only 8 ("Senseair" instead of "Senseair AB")
+    objLen = 8;
   }else if(objId == 1) {
     objLen = 7;
   }else if(objId == 2) {
