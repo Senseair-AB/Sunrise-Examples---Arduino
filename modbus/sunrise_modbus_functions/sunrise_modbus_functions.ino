@@ -1,7 +1,7 @@
 /*
  *******************************************************************************
  * @copyright   Copyright (C) by SenseAir AB. All rights reserved.
- * @file        sunrise_modbus_functions.ino
+ * @file        sunrise_modbus_continuous.ino
  * @brief       Example functions to perform different operations based on the
  *              "Modbus on Senseair Sunrise" documentation
  * @details     Tested on Arduino Mega 2560
@@ -42,7 +42,7 @@ int readPeriod = 4000;
  */
 uint8_t request[256];
 uint8_t response[256];
-uint16_t values[128];
+uint16_t values[256];
 char device[12];
 
 /**
@@ -99,7 +99,13 @@ int read_holding_registers(uint8_t comAddr, uint16_t regAddr, uint16_t numReg) {
     while(SunriseSerial.available() < n) {
       delay(1);
       counter++;
+
+      /* If the request times-out */
       if(counter > WAIT) {
+
+        /* If there are 5 bytes available, an exception 
+         * most likely occurred.
+         */
         if(SunriseSerial.available() == 5) {
           /* Store response bytes into a response array */
           int responseSize = SunriseSerial.available();
@@ -113,11 +119,14 @@ int read_holding_registers(uint8_t comAddr, uint16_t regAddr, uint16_t numReg) {
      
           return error;
         }
+
+        /* Otherwise the request just timed out*/
         return -1;
       }
     }
   }
 
+  /* If the request was Successful */
   /* Store response bytes into a response array */
   int responseSize = SunriseSerial.available();
 
@@ -191,7 +200,13 @@ int read_input_registers(uint8_t comAddr, uint16_t regAddr, uint16_t numReg) {
     while(SunriseSerial.available() < n) {
       delay(1);
       counter++;
+
+      /* If the request times-out */
       if(counter > WAIT) {
+
+        /* If there are 5 bytes available, an exception 
+         * most likely occurred.
+         */
         if(SunriseSerial.available() == 5) {
           /* Store response bytes into a response array */
           int responseSize = SunriseSerial.available();
@@ -205,11 +220,14 @@ int read_input_registers(uint8_t comAddr, uint16_t regAddr, uint16_t numReg) {
      
           return error;
         }
+
+        /* Otherwise the request just timed out*/
         return -1;
       }
     }
   }
 
+  /* If the request was Successful */
   /* Store response bytes into a response array */
   int responseSize = SunriseSerial.available();
 
@@ -301,7 +319,13 @@ int write_multiple_registers(uint8_t comAddr, uint8_t regAddr, uint16_t numReg, 
     while(SunriseSerial.available() < n) {
       delay(1);
       counter++;
+
+      /* If the request times-out */
       if(counter > WAIT) {
+
+        /* If there are 5 bytes available, an exception 
+         * most likely occurred.
+         */
         if(SunriseSerial.available() == 5) {
           /* Store response bytes into a response array */
           int responseSize = SunriseSerial.available();
@@ -315,11 +339,14 @@ int write_multiple_registers(uint8_t comAddr, uint8_t regAddr, uint16_t numReg, 
      
           return error;
         }
+
+        /* Otherwise the request just timed out*/
         return -1;
       }
     }
   }
 
+  /* If the request was Successful */
   /* Store response bytes into a response array */
   int responseSize = SunriseSerial.available();
   
