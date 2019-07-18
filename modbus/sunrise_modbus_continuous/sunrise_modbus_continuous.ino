@@ -2,8 +2,10 @@
  *******************************************************************************
  * @copyright   Copyright (C) by SenseAir AB. All rights reserved.
  * @file        sunrise_modbus_continuous.ino
- * @brief       Example functions to perform different operations based on the
- *              "Modbus on Senseair Sunrise" documentation
+ * @brief       Example functions to perform different the different operations 
+ *              descrived in the "Modbus on Senseair Sunrise" documentation.
+ *              This example mainly covers operations in continuous measurement
+ *              mode.
  * @details     Tested on Arduino Mega 2560
  *              
  * @author      William Sandkvist
@@ -38,7 +40,7 @@ int readPeriod = 4000;
  * Consequently: 
  * RS232 / RS485 ADU  = 253 bytes + Server address (1 byte) + CRC (2 bytes) = 256 bytes. 
  * TCP MODBUS ADU = 253 bytes + MBAP (7 bytes) = 260 bytes
- * From: MODBUS APPLICATION PROTOCOL SPECIFICATION V1.1b3
+ * From: MODBUS APPLICATION PROTOCOL SPECIFICATION V1.1b3 TODO: FIXA SOURCE
  */
 uint8_t request[256];
 uint8_t response[256];
@@ -46,16 +48,16 @@ uint16_t values[256];
 char device[12];
 
 /**
-  * @brief  Reads multiple holding registers.
-  * 
-  * @param  comAddr:      Communication address
-  *         regAddr:      Starting register address
-  *         numReg:       Number of registers to read from
-  * @note   This function stores the values read through a global
-  *         araay, which can then be read to obtain the values.
-  * @retval Error status, 0 on success, -1 on communication error
-  *         or time-out, and 1 - 3 for exceptions.
-  */
+ * @brief  Reads multiple holding registers.
+ * 
+ * @param  comAddr:      Communication address
+ *         regAddr:      Starting register address
+ *         numReg:       Number of registers to read from
+ * @note   This function stores the values read through a global
+ *         araay, which can then be read to obtain the values.
+ * @retval Error status, 0 on success, -1 on communication error
+ *         or time-out, and 1 - 3 for exceptions.
+ */
 int read_holding_registers(uint8_t comAddr, uint16_t regAddr, uint16_t numReg) {
   /* Return variable */
   int error = 0;
@@ -148,16 +150,16 @@ int read_holding_registers(uint8_t comAddr, uint16_t regAddr, uint16_t numReg) {
 }
 
 /**
-  * @brief  Reads multiple input registers.
-  * 
-  * @param  comAddr:      Communication address
-  *         regAddr:      Starting register address
-  *         numReg:       Number of registers to read from
-  * @note   This function stores the values read through a global
-  *         araay, which can then be read to obtain the values.
-  * @retval Error status, 0 on success, -1 on communication error
-  *         or time-out, and 1 - 3 for exceptions.
-  */
+ * @brief  Reads multiple input registers.
+ * 
+ * @param  comAddr:      Communication address
+ *         regAddr:      Starting register address
+ *         numReg:       Number of registers to read from
+ * @note   This function stores the values read through a global
+ *         araay, which can then be read to obtain the values.
+ * @retval Error status, 0 on success, -1 on communication error
+ *         or time-out, and 1 - 3 for exceptions.
+ */
 int read_input_registers(uint8_t comAddr, uint16_t regAddr, uint16_t numReg) {
   /* Return variable */
   int error = 0;
@@ -249,15 +251,15 @@ int read_input_registers(uint8_t comAddr, uint16_t regAddr, uint16_t numReg) {
 }
 
 /**
-  * @brief  Writes to multiple holding registers.
-  * 
-  * @param  comAddr:  Communication address
-  *         regAddr:  Register address
-  *         numReg:   Number of registers to write to
-  *         writeVal: The values to write to the registers
-  * @retval Error status, 0 on success, -1 on communication error
-  *         or time-out, and 1 - 3 for exceptions.
-  */
+ * @brief  Writes to multiple holding registers.
+ * 
+ * @param  comAddr:  Communication address
+ *         regAddr:  Register address
+ *         numReg:   Number of registers to write to
+ *         writeVal: The values to write to the registers
+ * @retval Error status, 0 on success, -1 on communication error
+ *         or time-out, and 1 - 3 for exceptions.
+ */
 int write_multiple_registers(uint8_t comAddr, uint8_t regAddr, uint16_t numReg, uint16_t writeVal[]) {
   /* Return variable */
   int error = 0;
@@ -267,12 +269,12 @@ int write_multiple_registers(uint8_t comAddr, uint8_t regAddr, uint16_t numReg, 
 
   uint8_t regAddrHi = (regAddr >> 8);
   uint8_t regAddrLo = regAddr & 0xFF;
-  
+
   uint8_t numRegHi = (numReg >> 8);
   uint8_t numRegLo = numReg & 0xFF;
 
   uint8_t numBytes = numReg * 2;
-  
+
   uint8_t writeValHi;
   uint8_t writeValLo;
   uint8_t modbusPDU[7 + numBytes];
@@ -358,14 +360,14 @@ int write_multiple_registers(uint8_t comAddr, uint8_t regAddr, uint16_t numReg, 
 }
 
 /**
-  * @brief  Reads one of the device's ID objects.
-  * 
-  * @param  comAddr:      Communication address
-  *         regAddr:      Register address
-  *         numReg:       Number of registers to write to
-  *         returnValues: Array of values to be written to the registers        
-  * @retval None
-  */
+ * @brief  Reads one of the device's ID objects.
+ * 
+ * @param  comAddr:      Communication address
+ *         regAddr:      Register address
+ *         numReg:       Number of registers to write to
+ *         returnValues: Array of values to be written to the registers        
+ * @retval None
+ */
 int read_device_id(uint8_t comAddr, uint8_t objId) {
   /* Return variable */
   int error = 0;
@@ -455,15 +457,15 @@ int read_device_id(uint8_t comAddr, uint8_t objId) {
 }
 
 /**
-  * @brief  A handler for possible exceptions and errors.
-  * 
-  * @param  pdu[]: An array containing the response from a request
-  *         funCode: The function code used for the request
-  *         len: The length of the pdu
-  * @retval  -1 for incorrect CRC, 0 on success, 1 for Illegal
-  *          Function, 2 for Illegal Data Address, and 3 for
-  *          Illegal Data Value
-  */
+ * @brief  A handler for possible exceptions and errors.
+ * 
+ * @param  pdu[]: An array containing the response from a request
+ *         funCode: The function code used for the request
+ *         len: The length of the pdu
+ * @retval  -1 for incorrect CRC, 0 on success, 1 for Illegal
+ *          Function, 2 for Illegal Data Address, and 3 for
+ *          Illegal Data Value
+ */
 int _handler(uint8_t pdu[], uint8_t funCode, int len) {
   /* Return variable */
   int error = 0;
@@ -509,14 +511,14 @@ int _handler(uint8_t pdu[], uint8_t funCode, int len) {
 }
 
 /**
-  * @brief  Computes a Modbus RTU message CRC, for a given message.
-  * 
-  * @param  pdu[]: An array containing the message
-  *         len: the length of the array
-  * @note   The bytes in the return value needs to be switched for
-  *         them to be in the right order in the message.
-  * @retval The CRC for the message
-  */
+ * @brief  Computes a Modbus RTU message CRC, for a given message.
+ * 
+ * @param  pdu[]: An array containing the message
+ *         len: the length of the array
+ * @note   The bytes in the return value needs to be switched for
+ *         them to be in the right order in the message.
+ * @retval The CRC for the message
+ */
 uint16_t _generate_crc(uint8_t pdu[], int len) {
   uint16_t crc = 0xFFFF;
   
@@ -541,10 +543,10 @@ uint16_t _generate_crc(uint8_t pdu[], int len) {
 }
 
 /**
-  * @brief  This function runs once at the start.
-  *
-  * @retval None
-  */
+ * @brief  This function runs once at the start.
+ *
+ * @retval None
+ */
 void setup() {
   pinMode(LED_BUILTIN, OUTPUT);
   digitalWrite(LED_BUILTIN, HIGH);
@@ -558,28 +560,28 @@ void setup() {
   /* Read the sensor's Device ID */
   Serial.println("Sensor's Device ID");
   read_sensor_id(SUNRISE_ADDR);
-  Serial.println(' ');
+  Serial.println();
 
   /* Read the sensor's configs */
   Serial.println("Sensor's Measurement Configs");
   read_sensor_config(SUNRISE_ADDR);
-  Serial.println(' ');
+  Serial.println();
 
-  /* Change measurement configs */
-  //change_measurement_config(SUNRISE_ADDR);
-  //Serial.println(' ');
+  /* Change measurement mode if single */
+  change_measurement_mode(SUNRISE_ADDR);
+  Serial.println();
 
   delay(readPeriod);
 }
 
 /**
-  * @brief  Reads and prints the sensor's device identification.
-  * 
-  * @param  target: The sensor's communication address.
-  * @note   This example shows a simple way to read and print the 
-  *         sensor's Vendor Name, ProductCode and MajorMinorRevision.
-  * @retval None
-  */
+ * @brief  Reads and prints the sensor's device identification.
+ * 
+ * @param  target: The sensor's communication address.
+ * @note   This example shows a simple way to read and print the 
+ *         sensor's Vendor Name, ProductCode and MajorMinorRevision.
+ * @retval None
+ */
 void read_sensor_id(uint8_t target) {
   /* Vendor Name */
   if(read_device_id(target, 0) != 0) {
@@ -607,14 +609,14 @@ void read_sensor_id(uint8_t target) {
 }
 
 /**
-  * @brief  Reads and prints the sensor's current measurement mode,
-  *         measurement period and number of samples.
-  * 
-  * @param  target: The sensor's communication address
-  * @note   This example shows a simple way to read the sensor's
-  *         measurement configurations.
-  * @retval None
-  */
+ * @brief  Reads and prints the sensor's current measurement mode,
+ *         measurement period and number of samples.
+ * 
+ * @param  target: The sensor's communication address
+ * @note   This example shows a simple way to read the sensor's
+ *         measurement configurations.
+ * @retval None
+ */
 void read_sensor_config(uint8_t target) {
   /* Function variables */
   uint16_t regAddr = 0x000A;
@@ -640,79 +642,59 @@ void read_sensor_config(uint8_t target) {
   readPeriod = measPeriod * 1000;
 
   /* Read measurement samples */
-  Serial.print("Measurement Samples: ");
+  Serial.print("Number of Samples: ");
   Serial.println(measSamples); 
 }
 
 /**
-  * @brief  Changes the sensor's current measurement mode,
-  *         measurement period and number of samples.
-  * 
-  * @param  target: The sensor's communication address
-  * @note   This example shows a simple way to change the sensor's
-  *         measurement configurations for measurement period and
-  *         number of samples.
-  *         
-  *         The sensor has to be manually restarted after the
-  *         changes.
-  * @retval None
-  */
-void change_measurement_config(uint8_t target) {
+ * @brief  Changes the sensor's current measurement mode, if it's
+ *         currently in single mode. 
+ * 
+ * @param  target: The sensor's communication address
+ * @note   This example shows a simple way to change the sensor's
+ *         measurement mode. The sensor has to be manually restarted after the
+ *         changes.
+ * @retval None
+ */
+void change_measurement_mode(uint8_t target) {
   /* Function variables */
-  uint16_t regAddr = 0x000B;
+  uint16_t regAddr = 0x000A;
 
-  uint16_t numReg = 0x0002;
+  uint16_t numReg = 0x0001;
 
-  uint16_t periodLong = 0x0004;
-  uint16_t periodShort =0x0002;
-
-  uint16_t samplesMany = 0x0010;
-  uint16_t samplesFew =0x0008;
-
-  uint16_t input[2];
+  uint16_t continuous[] = {0x0000};
+  uint16_t single = 0x0001;
 
   if(read_holding_registers(target, regAddr, numReg) != 0) {
-    Serial.println("EXCEPTION: Failed to read Measurement Configurations");
-    Serial.println("Unable to change Measurement Configurations");
+    Serial.println("EXCEPTION: Faled to read Measurement Mode");
+    Serial.println("Failed to change Measurement Mode");
     return;
   }
 
-  /* Check current values and change input accordingly */
-  if(values[0] == periodShort) {
-    input[0] = periodLong;
-    Serial.println("Changing Measurement period to 4 sec...");
-  }else if(values[0] == periodLong) {
-    input[0] = periodShort;
-    Serial.println("Changing Measurement period to 2 sec...");
-  }
-
-  if(values[1] == samplesFew) {
-    input[1] = samplesMany;
-    Serial.println("Changing Measurement Samples to 16...");
-  }else if(values[1] == samplesMany) {
-    input[1] = samplesFew;
-    Serial.println("Changing Measurement Samples to 8...");
-  }
-
-  /* Send a request to change the values */
-  if(write_multiple_registers(target, regAddr, numReg, input) != 0) {
-    Serial.println("EXCEPTION: Failed to change Measurement Configureations ");
-  }else { 
+  if(values[0] == single) {
+    Serial.println("Changing Measurement Mode to Continuous...");
+    if(write_multiple_registers(target, regAddr, numReg, continuous) != 0) {
+      Serial.println("EXCEPTION: Failed to change Measurement Mode");
+      while(true){
+        delay(600000);
+      }
+    }
     Serial.println("Sensor restart is required to apply changes");
+    while(true){
+      delay(600000);
+    }
   }
 }
 
 /**
-  * @brief  Reads and prints the sensor's current CO2 value and
-  *         error status.
-  * 
-  * @param  target: The sensor's communication address
-  * @note   This example shows a simple way to read the sensor's
-  *         CO2 measurement and error status, using two requests 
-  *         for reading the input registers where they are
-  *         located.
-  * @retval None
-  */
+ * @brief  Reads and prints the sensor's current CO2 value and
+ *         error status.
+ * 
+ * @param  target: The sensor's communication address
+ * @note   This example shows a simple way to read the sensor's
+ *         CO2 measurement and error status.
+ * @retval None
+ */
 void read_sensor_measurements(uint8_t target) {
   /* Function variables */
   uint16_t regAddr = 0x0000;
@@ -734,12 +716,12 @@ void read_sensor_measurements(uint8_t target) {
 }
 
 /**
-  * @brief  The main function loop. Reads the sensor's current
-  *         CO2 value and error status and prints them to the 
-  *         Serial Monitor.
-  * 
-  * @retval None
-  */
+ * @brief  The main function loop. Reads the sensor's current
+ *         CO2 value and error status and prints them to the 
+ *         Serial Monitor.
+ * 
+ * @retval None
+ */
 void loop() {
   static int pin_value = HIGH;
 
