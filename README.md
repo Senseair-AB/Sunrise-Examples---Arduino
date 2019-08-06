@@ -15,19 +15,22 @@
 
 How to implement communication with Senseair Sunrise sensor with Arduino using I2C or Modbus.
 
-These applications demonstrates easy ways to use Arduino to communicate with the Senseair Sunrise sensor using either the I2C or Modbus
-communication protocols.
+These applications demonstrates easy ways to use Arduino to communicate with the Senseair Sunrise sensor using either the I2C or 
+Modbus communication protocols.
 
-@note The I2C and Modbus examples uses the Wire and SoftwareSerial libraries respectively. 
+@note The I2C and Modbus examples uses the DSS Circuits Arduino I2C Master(http://dsscircuits.com/articles/arduino-i2c-master-library) 
+	  and SoftwareSerial libraries, where the first is only used in the I2C examples and the latter is used in all but one of the I2C 
+	  examples.
 
 
 
 
 @par Directory contents
-    - sunrise-examples-arduino/modbus/sunrise_modbus_continuous/sunrise_modbus_continuous.ino	Example for Modbus in continuous mode
-    - sunrise-examples-arduino/modbus/sunrise_modbus_single/sunrise_modbus_single.ino			Example for Modbus in single mode
-    - sunrise-examples-arduino/i2c/sunrise_i2c_continuous/sunrise_i2c_continuous.ino			Example for I2C in continuous mode
-    - sunrise-examples-arduino/i2c/sunrise_i2c_single/sunrise_i2c_single.ino					Example for I2C in single mode
+    - sunrise-examples-arduino/examlpes/modbus/sunrise_modbus_continuous/sunrise_modbus_continuous.ino	Example for Modbus in continuous mode
+    - sunrise-examples-arduino/examlpes/modbus/sunrise_modbus_single/sunrise_modbus_single.ino			Example for Modbus in single mode
+    - sunrise-examples-arduino/examlpes/i2c/sunrise_i2c_continuous/sunrise_i2c_continuous.ino			Example for I2C in continuous mode
+    - sunrise-examples-arduino/examlpes/i2c/sunrise_i2c_single/sunrise_i2c_single.ino					Example for I2C in single mode
+	- sunrise-examples-arduino/libraries/I2C															The DSS Circuits Arduino I2C Master Library
 
 @par Hardware and Software environment
 
