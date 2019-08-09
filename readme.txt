@@ -31,10 +31,8 @@ Modbus communication protocols.
     - sunrise-examples-arduino/examlpes/i2c/sunrise_i2c_continuous/sunrise_i2c_continuous.ino			Example for I2C in continuous mode
     - sunrise-examples-arduino/examlpes/i2c/sunrise_i2c_single/sunrise_i2c_single.ino					Example for I2C in single mode
 	- sunrise-examples-arduino/libraries/I2C															The DSS Circuits Arduino I2C Master Library
-	- sunrise-examples-arduino/wiring/sunrise_i2c_continuous.pdf                                        Wiring for the I2C in continuous mode example
-	- sunrise-examples-arduino/wiring/sunrise_i2c_single.pdf                                            Wiring for the I2C in single mode example
-	- sunrise-examples-arduino/wiring/sunrise_modbus_continuous.pdf                                     Wiring for the Modbus in continuous mode example
-	- sunrise-examples-arduino/wiring/sunrise_modbus_single.pdf                                         Wiring for the Modbus in single mode example
+	- sunrise-examples-arduino/wiring/i2c                                                               Wiring for the I2C examples
+	- sunrise-examples-arduino/wiring/modbus                                                            Wiring for the Modbus examples
 
 @par Hardware and Software environment
 
