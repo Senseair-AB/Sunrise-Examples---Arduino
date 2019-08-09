@@ -31,17 +31,20 @@ Modbus communication protocols.
     - sunrise-examples-arduino/examlpes/i2c/sunrise_i2c_continuous/sunrise_i2c_continuous.ino			Example for I2C in continuous mode
     - sunrise-examples-arduino/examlpes/i2c/sunrise_i2c_single/sunrise_i2c_single.ino					Example for I2C in single mode
 	- sunrise-examples-arduino/libraries/I2C															The DSS Circuits Arduino I2C Master Library
+	- sunrise-examples-arduino/wiring/sunrise_i2c_continuous.pdf                                        Wiring for the I2C in continuous mode example
+	- sunrise-examples-arduino/wiring/sunrise_i2c_single.pdf                                            Wiring for the I2C in single mode example
+	- sunrise-examples-arduino/wiring/sunrise_modbus_continuous.pdf                                     Wiring for the Modbus in continuous mode example
+	- sunrise-examples-arduino/wiring/sunrise_modbus_single.pdf                                         Wiring for the Modbus in single mode example
 
 @par Hardware and Software environment
 
   - This application runs on Arduino Mega 2560.
     
-  - This application has been tested with....
-    
 
 @par How to use it ?
 
 In order to make the program work, you must do the following:
+ - Place the DSS Circuits Arduino I2C Master library in your IDE's library folder 
  - Open one of the examlpes in the Arduino IDE
  - Upload the file into the target memory
  - Run the example
