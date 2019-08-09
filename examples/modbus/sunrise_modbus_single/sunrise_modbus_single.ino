@@ -577,7 +577,7 @@ void setup() {
   change_measurement_mode(SUNRISE_ADDR);
 
   /* Initial measurement */
-  Serial.println("Inital measurement");
+  Serial.println("Inital Measurement");
   init_measurement(SUNRISE_ADDR);
 
   delay(readPeriod);
@@ -703,7 +703,10 @@ void change_measurement_mode(uint8_t target) {
  * 
  * @param  target: The sensor's communication address
  * @note   This initial measurement is used to collect the sensor
- *         status before regular consecutive measuring ensues.
+ *         status before regular consecutive measuring ensues. It
+ *         is very important that host do not write '0' to HR36-
+ *         HR46 first time it starts a measurement.
+ *         
  * @retval None
  */
 void init_measurement(uint8_t target) {
@@ -810,7 +813,6 @@ void read_sensor_measurements(uint8_t target) {
     digitalWrite(SUNRISE_EN, LOW);
     return;
   }
-   
 
   /* Wait for ready pin to go low, 2 sec default */
   delay(2000);
