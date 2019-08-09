@@ -3,14 +3,14 @@
  * @copyright   Copyright (C) by SenseAir AB. All rights reserved.
  * @file        sunrise_i2c_continuous.ino
  * @brief       Example functions to perform different the different operations 
- *              descrived in the "I2C on Senseair Sunrise" documentation.
- *              This example mainly covers operations in continuous measurement
- *              mode.
+ *              descrived in the "I2C on Senseair Sunrise" documentation 
+ *              (available on the www.senseair.com website). This example mainly 
+ *              covers operations in continuous measurement mode.
  * @details     Tested on Arduino Mega 2560
  *              
  * @author      William Sandkvist
- * @version     0.01
- * @date        2019-08-06
+ * @version     0.02
+ * @date        2019-08-09
  * 
  *******************************************************************************
  */
@@ -40,6 +40,7 @@ int _wakeup(uint8_t target) {
   int error;
   int counter = 0;
 
+  /* On success the write function will return either 32 or 0 */
   while(error = I2c.write(target, target) != 32 && error != 0) {
     counter++;
     if(counter == ATTEMPTS) {
