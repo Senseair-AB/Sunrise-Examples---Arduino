@@ -3,14 +3,14 @@
  * @copyright   Copyright (C) by SenseAir AB. All rights reserved.
  * @file        sunrise_modbus_continuous.ino
  * @brief       Example functions to perform different the different operations 
- *              descrived in the "Modbus on Senseair Sunrise" documentation.
- *              This example mainly covers operations in continuous measurement
- *              mode.
+ *              descrived in the "Modbus on Senseair Sunrise" documentation 
+ *              (available on the www.senseair.com website). This example mainly 
+ *              covers operations in continuous measurement mode.
  * @details     Tested on Arduino Mega 2560
  *              
  * @author      William Sandkvist
- * @version     0.11
- * @date        2019-07-11
+ * @version     0.12
+ * @date        2019-08-09
  *
  *******************************************************************************
  */
@@ -37,10 +37,9 @@ int readPeriod = 4000;
 
 /**  
  * Arrays for request, responses and register values
- * Consequently: 
- * RS232 / RS485 ADU  = 253 bytes + Server address (1 byte) + CRC (2 bytes) = 256 bytes. 
- * TCP MODBUS ADU = 253 bytes + MBAP (7 bytes) = 260 bytes
- * From: MODBUS APPLICATION PROTOCOL SPECIFICATION V1.1b3 TODO: FIXA SOURCE
+ * Sizes based on:
+ * MODBUS APPLICATION PROTOCOL SPECIFICATION V1.1b3 
+ * Available on the www.modbus.org website
  */
 uint8_t request[256];
 uint8_t response[256];
