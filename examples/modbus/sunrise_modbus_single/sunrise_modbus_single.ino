@@ -9,12 +9,11 @@
  * @details     Tested on Arduino Mega 2560
  *              
  * @author      William Sandkvist
- * @version     0.06
+ * @version     0.07
  * @date        2019-08-09
  *
  *******************************************************************************
  */
-
 
 #include <SoftwareSerial.h>
 
@@ -38,6 +37,12 @@ const int       WAIT                    = 180;
 
 /* Reading period, in milliseconds. Default is 4 seconds */
 int readPeriod = 4000;
+
+/* 
+ * Variable for keeping track of time passed since last 
+ * ABC calibration.
+ */
+unsigned long int abc = 0;
 
 /**  
  * Arrays for request, responses and register values 
@@ -264,7 +269,7 @@ int read_input_registers(uint8_t comAddr, uint16_t regAddr, uint16_t numReg) {
  * @retval Error status, 0 on success, -1 on communication error
  *         or time-out, and 1 - 3 for exceptions.
  */
-int write_multiple_registers(uint8_t comAddr, uint8_t regAddr, uint16_t numReg, uint16_t writeVal[]) {
+int write_multiple_registers(uint8_t comAddr, uint16_t regAddr, uint16_t numReg, uint16_t writeVal[]) {
   /* Return variable */
   int error = 0;
 
@@ -704,7 +709,6 @@ void change_measurement_mode(uint8_t target) {
  *         status before regular consecutive measuring ensues. It
  *         is very important that host do not write '0' to HR36-
  *         HR46 first time it starts a measurement.
- *         
  * @retval None
  */
 void init_measurement(uint8_t target) {
@@ -725,7 +729,7 @@ void init_measurement(uint8_t target) {
   delay(35);
 
   /* Start measurement command to HR34 */
-  if(write_multiple_registers(target, regAddrCmd, numRegCmd, 1) != 0) {
+  if(write_multiple_registers(target, regAddrCmd, numRegCmd, {1}) != 0) {
     Serial.println("EXCEPTION: Failed to send measurement command");
     digitalWrite(SUNRISE_EN, LOW);
     while(true) {
@@ -846,6 +850,41 @@ void read_sensor_measurements(uint8_t target) {
 }
 
 /**
+ * @brief  Reads and prints the sensor's current CO2 value and
+ *         error status.
+ * 
+ * @param  target: The sensor's communication address
+ * @note   This example shows a simple way to read the sensor's
+ *         CO2 measurement and error status in single mode.
+ * @retval None
+ */
+int increase_abc(uint8_t target) {
+  /* Function variables */
+  uint16_t regAddr = 0x0022;
+  uint16_t numReg = 0x0001;
+
+  /* Read current value from HR35 */
+  if(read_holding_registers(target, regAddr, numReg) != 0) {
+    Serial.println("EXCEPTION: Failed to read register value");
+    return;
+  }
+
+  uint16_t newValue[] = {values[0] + 1};
+
+  /* Write new value back to HR35 */
+  if(write_multiple_registers(target, regAddr, numReg, newValue) != 0) {
+    Serial.println("EXCEPTION: Failed to write to register command");
+    return;
+  }
+
+  if(read_holding_registers(target, regAddr, numReg) != 0) {
+    Serial.println("EXCEPTION: Failed to read register value");
+    return;
+  }
+  Serial.println("\n ABC Time updated\n");
+}
+
+/**
  * @brief  The main function loop. Reads the sensor's current
  *         CO2 value and error status and prints them to the 
  *         Serial Monitor.
@@ -861,6 +900,24 @@ void loop() {
   /* Delay between readings */
   Serial.println("\nWaiting...\n");
   delay(readPeriod);
+
+  /* 
+   *  The read function takes about 2035 ms to run. So the abc
+   *  variable has to be increased by  2 + readPeriod ms.  
+   */
+  abc += (readPeriod + 2035);
+  Serial.print("abc = ");
+  Serial.println(abc);
+  Serial.println();
+
+  /* 
+   *  When abc value has reached 3 600 000  
+   *  HR35 has to be increased by 1.
+   */
+  if(abc >= 3600000) {
+    increase_abc(SUNRISE_ADDR);
+    abc = 0;
+  }
   
   /* Indicate working state */
   digitalWrite(LED_BUILTIN, pin_value);
