@@ -44,7 +44,7 @@ Modbus communication protocols.
 @par How to use it ?
 
 In order to make the program work, you must do the following:
- - Place the DSS Circuits Arduino I2C Master library in your IDE's library folder 
+ - Place the DSS Circuits Arduino I2C Master library in your Arduino IDE's library folder 
  - Open one of the examlpes in the Arduino IDE
  - Upload the file into the target memory
  - Run the example
