@@ -70,7 +70,6 @@ int read_holding_registers(uint8_t comAddr, uint16_t regAddr, uint16_t numReg) {
   uint8_t numRegHi = (numReg >> 8);
   uint8_t numRegLo = numReg & 0xFF;
   
-
   /* Define Modbus PDU */
   request[0] = comAddr;
   request[1] = funCode;
@@ -170,7 +169,6 @@ int read_input_registers(uint8_t comAddr, uint16_t regAddr, uint16_t numReg) {
     
   uint8_t numRegHi = (numReg >> 8);
   uint8_t numRegLo = numReg & 0xFF;
-  
 
   /* Define Modbus PDU */
   request[0] = comAddr;
