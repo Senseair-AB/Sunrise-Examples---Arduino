@@ -9,7 +9,7 @@
  * @details     Tested on Arduino Mega 2560     
  *              
  * @author      William Sandkvist
- * @version     0.02
+ * @version     0.03
  * @date        2019-08-09
  *
  *******************************************************************************
