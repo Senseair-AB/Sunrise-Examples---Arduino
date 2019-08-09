@@ -565,7 +565,7 @@ void setup() {
   Serial.println();
 
   /* Change measurement mode if single */
-  //change_measurement_mode(SUNRISE_ADDR);
+  change_measurement_mode(SUNRISE_ADDR);
   Serial.println();
 
   delay(readPeriod);
