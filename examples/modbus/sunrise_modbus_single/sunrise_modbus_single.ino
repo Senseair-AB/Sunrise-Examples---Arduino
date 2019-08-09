@@ -3,12 +3,14 @@
  * @copyright   Copyright (C) by SenseAir AB. All rights reserved.
  * @file        sunrise_modbus_single.ino
  * @brief       Example for reading sensor data in single measurement mode.
- *              Based on the "Modbus on Senseair Sunrise" documentation.
+ *              Based on the "Modbus on Senseair Sunrise" documentation 
+ *              (available on the www.senseair.com website). This example mainly
+ *              covers operations in single measurement mode.
  * @details     Tested on Arduino Mega 2560
  *              
  * @author      William Sandkvist
- * @version     0.05
- * @date        2019-07-11
+ * @version     0.06
+ * @date        2019-08-09
  *
  *******************************************************************************
  */
@@ -38,11 +40,10 @@ const int       WAIT                    = 180;
 int readPeriod = 4000;
 
 /**  
- * Arrays for request, responses and register values
- * Consequently: 
- * RS232 / RS485 ADU  = 253 bytes + Server address (1 byte) + CRC (2 bytes) = 256 bytes. 
- * TCP MODBUS ADU = 253 bytes + MBAP (7 bytes) = 260 bytes
- * From: MODBUS APPLICATION PROTOCOL SPECIFICATION V1.1b3
+ * Arrays for request, responses and register values 
+ * Sizes based on:
+ * MODBUS APPLICATION PROTOCOL SPECIFICATION V1.1b3 
+ * Available on the www.modbus.org website
  */
 uint8_t request[256];
 uint8_t response[256];
