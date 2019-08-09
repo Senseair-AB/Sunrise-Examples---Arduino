@@ -1,38 +1,43 @@
 /**
  *******************************************************************************
  * @copyright   Copyright (C) by SenseAir AB. All rights reserved.
- * @file        sunrise_i2c_continuous.ino
+ * @file        sunrise_i2c_single.ino
  * @brief       Example functions to perform different the different operations 
- *              descrived in the "I2C on Senseair Sunrise" documentation 
+ *              descrived in the "I2C on Senseair Sunrise" documentation
  *              (available on the www.senseair.com website). This example mainly 
- *              covers operations in continuous measurement mode.
- * @details     Tested on Arduino Mega 2560
+ *              covers operations in single measurement mode.
+ * @details     Tested on Arduino Mega 2560     
  *              
  * @author      William Sandkvist
  * @version     0.02
  * @date        2019-08-09
- * 
+ *
  *******************************************************************************
  */
 
 #include <I2C.h>
+#include <SoftwareSerial.h>
+
+/* Define serial EN pin */
+const int       SUNRISE_EN              = 8;
 
 /* Sunrise communication address, both for Modbus and I2C */
 const uint8_t   SUNRISE_ADDR            = 0x68;
 
-/*
- * Amount of wakeup attempts before time-out
- */
+/* Amount of wakeup attempts before time-out */
 const int       ATTEMPTS                 = 50;
 
 /* Reading period, in milliseconds. Default is 4 seconds */
 int readPeriod = 4000;
 
+/* Array for storing sensor state data */
+uint8_t state[24];
+
 /** 
  * @brief  Wakes up the sensor by initializing a write operation
  *         with no data.
  * 
- * @param  target: The sensor's communication address
+ * @param  target:      The sensor's communication address
  * @note   This example shows a simple way to wake up the sensor.
  * @retval Error code encountered
  */
@@ -60,11 +65,16 @@ void setup()
   pinMode(LED_BUILTIN, OUTPUT);
   digitalWrite(LED_BUILTIN, HIGH);
 
+  pinMode(SUNRISE_EN, INPUT);
+  
   /* I2C */
   /* Initialize I2C and use default pins defined for the board */
   I2c.begin();
 
-  /* Set I2C clock to 100kHz */
+  /*  
+   * Set I2C clock to 100kHz 
+   * Based on Data rate from documentation
+   */
   I2c.setSpeed(0);  
   Serial.begin(115200);
 
@@ -75,8 +85,12 @@ void setup()
   read_sensor_config(SUNRISE_ADDR);
   Serial.println();
 
-  /* Change measurement mode if single */
+  /* Change measurement mode if continuous */
   change_measurement_mode(SUNRISE_ADDR);
+
+  /* Initial measurement */
+  Serial.println("Saving Sensor State");
+  save_state(SUNRISE_ADDR);
 
   delay(readPeriod);
 }
@@ -85,7 +99,7 @@ void setup()
  * @brief  Reads and prints the sensor's current measurement mode,
  *         measurement period and number of samples.
  * 
- * @param  target: The sensor's communication address
+ * @param  target:      The sensor's communication address
  * @note   This example shows a simple way to read the sensor's
  *         measurement configurations.
  * @retval None
@@ -119,7 +133,7 @@ void read_sensor_config(uint8_t target) {
   uint8_t byteHi = I2c.receive();
   uint8_t byteLo = I2c.receive();
   uint16_t measPeriod = ((int16_t)(int8_t) byteHi << 8) | (uint16_t)byteLo;
-
+  
   /* Number of samples */
   byteHi = I2c.receive();
   byteLo = I2c.receive();
@@ -139,7 +153,7 @@ void read_sensor_config(uint8_t target) {
  * @brief  Changes the sensor's current measurement mode, if it's
  *         currently in single mode. 
  * 
- * @param  target: The sensor's communication address
+ * @param  target:      The sensor's communication address
  * @note   This example shows a simple way to change the sensor's
  *         measurement mode. The sensor has to be manually restarted after the
  *         changes.
@@ -170,8 +184,8 @@ void change_measurement_mode(uint8_t target) {
     }
   }
 
-  /* Change mode if single */
-  if(I2c.receive() == single) {
+  /* Change mode if continuous */
+  if(I2c.receive() == continuous) {
     /* Wakeup */
     if(error = _wakeup(target) != 32 && error != 0) {
       Serial.print("Failed to wake up sensor. Error code: ");
@@ -181,8 +195,8 @@ void change_measurement_mode(uint8_t target) {
       }
     }
     
-    Serial.println("Changing Measurement Mode to Continuous...");
-    if(error = I2c.write(target, reg, continuous) != 0) {
+    Serial.println("Changing Measurement Mode to Single...");
+    if(error = I2c.write(target, reg, single) != 0) {
       Serial.print("Failed to send request. Error code: ");
       Serial.println(error); 
       while(true){
@@ -197,20 +211,107 @@ void change_measurement_mode(uint8_t target) {
 }
 
 /**
+ * @brief  Reads the sensors current state data.
+ * 
+ * @param  target:      The sensor's communication address
+ * @note   If host device has no state data, it is very important 
+ *         that host do not write '0' to address 0xC2 - 0xDB the 
+ *         first time it starts a measurement.
+ * @retval None
+ */
+void save_state(uint8_t target) {
+  /* Function variables */
+  int error;
+
+  uint8_t regAddr = 0xC4;
+  int numReg = 24;
+
+  /* Drive EN pin HIGH */
+  digitalWrite(SUNRISE_EN, HIGH);
+
+  /* Wait for sensor start-up and stabilization */
+  delay(35);
+
+
+  /* Wakeup */
+  if(error = _wakeup(target) != 32 && error != 0) {
+    Serial.print("Failed to wake up sensor. Error code: ");
+    Serial.println(error);
+    return;
+  }
+
+  /* Request state data */
+  if(I2c.read(target, regAddr, numReg) != 0) {
+    Serial.print("Failed to read measurements command. Error code: ");
+    Serial.println(error);
+    digitalWrite(SUNRISE_EN, LOW);
+    return;
+  }
+
+  /* Read and save state data */
+  for(int n = 0 ; n < 24 ; n++) {
+    state[n] = I2c.receive();
+  }
+
+  /* Drive EN pin LOW */
+  digitalWrite(SUNRISE_EN, LOW);
+
+  Serial.println("Saved Sensor State Successfully\n");
+}
+
+/**
  * @brief  Reads and prints the sensor's current CO2 value and
  *         error status.
  * 
- * @param  target: The sensor's communication address
+ * @param  target:      The sensor's communication address
  * @note   This example shows a simple way to read the sensor's
  *         CO2 measurement and error status.
  * @retval None
  */
 void read_sensor_measurements(uint8_t target) {
-  /* Function variables */ 
+  /* Function variables */
   int error;
-  uint8_t reg = 0x01;
-  int numBytes = 7;
-  int counter = 0;
+
+  uint8_t regAddrCmd = 0xC3;
+  int numRegCmd = 25;
+
+  uint8_t regAddrRead = 0x01;
+  int numRegRead = 7;
+
+  uint8_t regAddrState = 0xC4;
+  int numRegState = 24;
+
+  uint8_t cmdArray[25];
+
+  cmdArray[0] = 0x01;
+
+  for(int n = 1 ; n < 25 ; n++) {
+    cmdArray[n] = state[n-1];
+  }
+
+  /* Drive EN pin HIGH */
+  digitalWrite(SUNRISE_EN, HIGH);
+
+  /* Wait for sensor start-up and stabilization */
+  delay(35);
+
+  /* Wakeup */
+  if(error = _wakeup(target) != 32 && error != 0) {
+    Serial.print("Failed to wake up sensor. Error code: ");
+    Serial.println(error);
+    return;
+  }
+
+  /* Write measurement command and sensor state to 0xC3 */
+  if(error = I2c.write(target, regAddrCmd, cmdArray, numRegCmd) != 0) {
+    Serial.print("Failed to send measurement command. Error code: ");
+    Serial.println(error);
+    digitalWrite(SUNRISE_EN, LOW);
+    return;
+  }
+
+  /* Wait until ready pin goes low */
+  delay(2000);
 
   /* Wakeup */
   if(error = _wakeup(target) != 32 && error != 0) {
@@ -220,14 +321,15 @@ void read_sensor_measurements(uint8_t target) {
   }
 
   /* Request values */
-  if(error = I2c.read(target, reg, numBytes) != 0) {
-    Serial.print("Failed to read values. Error code: ");
+  if(I2c.read(target, regAddrRead, numRegRead) != 0) {
+    Serial.print("Failed to read measurements command. Error code: ");
     Serial.println(error);
+    digitalWrite(SUNRISE_EN, LOW);
     return;
   }
 
   /* Read values */
-  /* Error status */
+  /* Error Status */
   uint8_t eStatus = I2c.receive();
 
   /* Reserved */
@@ -248,6 +350,30 @@ void read_sensor_measurements(uint8_t target) {
 
   Serial.print("Error Status: 0x");
   Serial.println(eStatus, HEX);
+
+  /* Wakeup */
+  if(error = _wakeup(target) != 32 && error != 0) {
+    Serial.print("Failed to wake up sensor. Error code: ");
+    Serial.println(error);
+    return;
+  }
+
+  /* Read sensor state data from 0xC4-0xDB and save it for next measurement */
+  if(I2c.read(target, regAddrState, numRegState) != 0) {
+    Serial.print("Failed to read measurements command. Error code: ");
+    Serial.println(error);
+    digitalWrite(SUNRISE_EN, LOW);
+    return;
+  }
+  
+  for(int n = 0 ; n < 24 ; n++) {
+    state[n] = I2c.receive();
+  }
+
+  /* Drive EN pin LOW */
+  digitalWrite(SUNRISE_EN, LOW);
+
+  Serial.println();
 }
 
 /**
