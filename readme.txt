@@ -5,7 +5,7 @@
  
   @verbatim
   ******************************************************************************
-  * @file    sunrise-examples-arduino/README.md
+  * @file    sunrise-examples-arduino/readme.txt
   * @author  Senseair FW team 
   * @brief   Senseair Sunrise Sensor with Arduino examples using I2C and Modbus communication
   ******************************************************************************
