@@ -464,9 +464,6 @@ void loop() {
    *  variable has to be increased by  2 + readPeriod ms.  
    */
   abc += (readPeriod + 2090);
-  Serial.print("abc = ");
-  Serial.println(abc);
-  Serial.println();
 
   /* 
    *  When abc value has reached 3 600 000  
