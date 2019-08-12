@@ -401,6 +401,7 @@ int increase_abc(uint8_t target) {
   if(error = _wakeup(target) != 32 && error != 0) {
     Serial.print("Failed to wake up sensor. Error code: ");
     Serial.println(error);
+    abc = 3600000;
     return;
   }
 
@@ -408,7 +409,7 @@ int increase_abc(uint8_t target) {
   if(I2c.read(target, regAddr, numReg) != 0) {
     Serial.print("Failed to send read request. Error code: ");
     Serial.println(error);
-    digitalWrite(SUNRISE_EN, LOW);
+    abc = 3600000;
     return;
   }
 
@@ -429,6 +430,7 @@ int increase_abc(uint8_t target) {
   if(error = _wakeup(target) != 32 && error != 0) {
     Serial.print("Failed to wake up sensor. Error code: ");
     Serial.println(error);
+    abc = 3600000;
     return;
   }
 
@@ -436,6 +438,7 @@ int increase_abc(uint8_t target) {
   if(error = I2c.write(target, regAddr, newAbc, numReg) != 0) {
     Serial.print("Failed to write to register. Error code: ");
     Serial.println(error);
+    abc = 3600000;
     return;
   }
 
@@ -470,8 +473,8 @@ void loop() {
    *  HR35 has to be increased by 1.
    */
   if(abc >= 3600000) {
-    increase_abc(SUNRISE_ADDR);
     abc = 0;
+    increase_abc(SUNRISE_ADDR);
   }
 
  /* Indicate working state */
