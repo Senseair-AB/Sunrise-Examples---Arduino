@@ -9,8 +9,8 @@
  * @details     Tested on Arduino Mega 2560
  *              
  * @author      William Sandkvist
- * @version     0.07
- * @date        2019-08-09
+ * @version     0.08
+ * @date        2019-08-12
  *
  *******************************************************************************
  */
@@ -39,8 +39,8 @@ const int       WAIT                    = 180;
 int readPeriod = 4000;
 
 /* 
- * Variable for keeping track of time passed since last 
- * ABC calibration.
+ * Variable for keeping track of time passed, in hours since 
+ * last ABC calibration.
  */
 unsigned long int abc = 0;
 
@@ -850,12 +850,11 @@ void read_sensor_measurements(uint8_t target) {
 }
 
 /**
- * @brief  Reads and prints the sensor's current CO2 value and
- *         error status.
+ * @brief  Increases the ABC Time by one.
  * 
  * @param  target: The sensor's communication address
- * @note   This example shows a simple way to read the sensor's
- *         CO2 measurement and error status in single mode.
+ * @note   This example shows a simple way to 
+ *         increase the sensor's ABC Time
  * @retval None
  */
 int increase_abc(uint8_t target) {
@@ -877,10 +876,6 @@ int increase_abc(uint8_t target) {
     return;
   }
 
-  if(read_holding_registers(target, regAddr, numReg) != 0) {
-    Serial.println("EXCEPTION: Failed to read register value");
-    return;
-  }
   Serial.println("\n ABC Time updated\n");
 }
 
@@ -902,10 +897,10 @@ void loop() {
   delay(readPeriod);
 
   /* 
-   *  The read function takes about 2035 ms to run. So the abc
+   *  The read function takes about 2190 ms to run. So the abc
    *  variable has to be increased by  2 + readPeriod ms.  
    */
-  abc += (readPeriod + 2035);
+  abc += (readPeriod + 2190);
   Serial.print("abc = ");
   Serial.println(abc);
   Serial.println();
