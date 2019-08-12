@@ -865,6 +865,7 @@ int increase_abc(uint8_t target) {
   /* Read current value from HR35 */
   if(read_holding_registers(target, regAddr, numReg) != 0) {
     Serial.println("EXCEPTION: Failed to read register value");
+    abc = 3600000;
     return;
   }
 
@@ -873,6 +874,7 @@ int increase_abc(uint8_t target) {
   /* Write new value back to HR35 */
   if(write_multiple_registers(target, regAddr, numReg, newValue) != 0) {
     Serial.println("EXCEPTION: Failed to write to register command");
+    abc = 3600000;
     return;
   }
 
@@ -907,8 +909,8 @@ void loop() {
    *  HR35 has to be increased by 1.
    */
   if(abc >= 3600000) {
-    increase_abc(SUNRISE_ADDR);
     abc = 0;
+    increase_abc(SUNRISE_ADDR);
   }
   
   /* Indicate working state */
