@@ -3,14 +3,14 @@
  * @copyright   Copyright (C) by SenseAir AB. All rights reserved.
  * @file        sunrise_i2c_single.ino
  * @brief       Example functions to perform different the different operations 
- *              descrived in the "I2C on Senseair Sunrise" documentation.
- *              This example mainly covers operations in single measurement
- *              mode.
+ *              descrived in the "I2C on Senseair Sunrise" documentation
+ *              (available on the www.senseair.com website). This example mainly 
+ *              covers operations in single measurement mode.
  * @details     Tested on Arduino Mega 2560     
  *              
  * @author      William Sandkvist
- * @version     0.03
- * @date        2019-08-06
+ * @version     0.05
+ * @date        2019-08-12
  *
  *******************************************************************************
  */
@@ -30,6 +30,12 @@ const int       ATTEMPTS                 = 50;
 /* Reading period, in milliseconds. Default is 4 seconds */
 int readPeriod = 4000;
 
+/* 
+ * Variable for keeping track of time passed, in hours, since 
+ * last ABC calibration.
+ */
+unsigned long int abc = 0;
+
 /* Array for storing sensor state data */
 uint8_t state[24];
 
@@ -45,6 +51,7 @@ int _wakeup(uint8_t target) {
   int error;
   int counter = 0;
 
+  /* On success the write function will return either 32 or 0 */
   while(error = I2c.write(target, target) != 32 && error != 0) {
     counter++;
     if(counter == ATTEMPTS) {
@@ -376,6 +383,66 @@ void read_sensor_measurements(uint8_t target) {
 }
 
 /**
+ * @brief  Increases the ABC Time by one.
+ * 
+ * @param  target: The sensor's communication address
+ * @note   This example shows a simple way to 
+ *         increase the sensor's ABC Time
+ * @retval None
+ */
+int increase_abc(uint8_t target) {
+  /* Function variables */
+  int error;
+  
+  uint8_t regAddr = 0x88;
+  int numReg = 2;
+
+  /* Wakeup */
+  if(error = _wakeup(target) != 32 && error != 0) {
+    Serial.print("Failed to wake up sensor. Error code: ");
+    Serial.println(error);
+    return;
+  }
+
+  /* Read current ABC Time value from 0x88 - 0x89 */
+  if(I2c.read(target, regAddr, numReg) != 0) {
+    Serial.print("Failed to send read request. Error code: ");
+    Serial.println(error);
+    digitalWrite(SUNRISE_EN, LOW);
+    return;
+  }
+
+  /* Read value */
+  uint8_t byteHi = I2c.receive();
+  uint8_t byteLo = I2c.receive();
+  uint16_t abcTime = ((int16_t)(int8_t) byteHi << 8) | (uint16_t)byteLo;
+
+  /* Increase current ABC Time by one */
+  abcTime++;
+
+  uint8_t abcHi = (abcTime >> 8);
+  uint8_t abcLo = abcTime & 0xFF;
+
+  uint8_t newAbc[] = {abcHi, abcLo};
+
+  /* Wakeup */
+  if(error = _wakeup(target) != 32 && error != 0) {
+    Serial.print("Failed to wake up sensor. Error code: ");
+    Serial.println(error);
+    return;
+  }
+
+  /* Write new value back to HR35 */
+  if(error = I2c.write(target, regAddr, newAbc, numReg) != 0) {
+    Serial.print("Failed to write to register. Error code: ");
+    Serial.println(error);
+    return;
+  }
+
+  Serial.println("\n ABC Time updated\n");
+}
+
+/**
  * @brief  The main function loop. Reads the sensor's current
  *         CO2 value and error status and prints them to the 
  *         Serial Monitor.
@@ -391,6 +458,24 @@ void loop() {
   /* Delay between readings */
   Serial.println("\nWaiting...\n");
   delay(readPeriod);
+
+  /* 
+   *  The read function takes about 2090 ms to run. So the abc
+   *  variable has to be increased by  2 + readPeriod ms.  
+   */
+  abc += (readPeriod + 2090);
+  Serial.print("abc = ");
+  Serial.println(abc);
+  Serial.println();
+
+  /* 
+   *  When abc value has reached 3 600 000  
+   *  HR35 has to be increased by 1.
+   */
+  if(abc >= 3600000) {
+    increase_abc(SUNRISE_ADDR);
+    abc = 0;
+  }
 
  /* Indicate working state */
   digitalWrite(LED_BUILTIN, pin_value);
