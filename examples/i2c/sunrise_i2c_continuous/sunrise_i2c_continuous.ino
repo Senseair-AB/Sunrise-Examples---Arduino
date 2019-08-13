@@ -2,7 +2,7 @@
  *******************************************************************************
  * @copyright   Copyright (C) by SenseAir AB. All rights reserved.
  * @file        sunrise_i2c_continuous.ino
- * @brief       Example functions to perform different the different operations 
+ * @brief       Example functions to perform the different operations 
  *              descrived in the "I2C on Senseair Sunrise" documentation 
  *              (available on the www.senseair.com website). This example mainly 
  *              covers operations in continuous measurement mode.
