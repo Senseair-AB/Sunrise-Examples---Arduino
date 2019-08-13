@@ -690,7 +690,7 @@ void change_measurement_mode(uint8_t target) {
     Serial.println("Sensor restart is required to apply changes");
     /* FATAL ERROR */
     while(true);
-  }
+  } 
 }
 
 /**
