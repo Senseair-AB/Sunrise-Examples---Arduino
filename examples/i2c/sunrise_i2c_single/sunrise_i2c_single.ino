@@ -112,12 +112,10 @@ void setup()
 
   /* Change measurement mode if continuous */
   change_measurement_mode(SUNRISE_ADDR);
-  Serial.println("TEST");
 
   /* Initial measurement */
   Serial.println("Saving Sensor State");
   save_state(SUNRISE_ADDR);
-  Serial.println("TEST");
 
   delay(readPeriodMs);
 }
