@@ -581,19 +581,17 @@ void setup() {
   pinMode(LED_BUILTIN, OUTPUT);
   digitalWrite(LED_BUILTIN, HIGH);
 
-  pinMode(SUNRISE_EN, INPUT);
+  /*
+   * Currently the program only works if the EN pin is defined as INPUT, 
+   * even though it should be defined as OUTPUT
+   */
+  pinMode(SUNRISE_EN, OUTPUT);
 
   /* Begin serial communication */
   Serial.begin(115200);
   SunriseSerial.begin(9600);
 
   Serial.println("Initialization complete \n");
-
-  /* Drive EN pin HIGH */
-  digitalWrite(SUNRISE_EN, HIGH);
-
-  /* Wait for sensor start-up and stabilization */
-  delay(STABILIZATION_MS);
 
   /* Read the sensor's Device ID */
   Serial.println("Sensor's Device ID");
@@ -611,8 +609,6 @@ void setup() {
   /* Initial measurement */
   Serial.println("Inital Measurement");
   init_measurement(SUNRISE_ADDR);
-
-  digitalWrite(SUNRISE_EN, LOW);
 
   delay(readPeriodMs);
 }
