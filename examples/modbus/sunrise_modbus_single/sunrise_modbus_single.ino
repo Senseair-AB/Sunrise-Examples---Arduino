@@ -1,16 +1,18 @@
-/*
+/**
  *******************************************************************************
  * @copyright   Copyright (C) by SenseAir AB. All rights reserved.
  * @file        sunrise_modbus_single.ino
- * @brief       Example for reading sensor data in single measurement mode.
+ * @brief       Example for reading sensor data in single measurement mode,
+ *              only for revision.
+ *              
  *              Based on the "Modbus on Senseair Sunrise" documentation 
  *              (available on the www.senseair.com website). This example mainly
  *              covers operations in single measurement mode.
  * @details     Tested on Arduino Mega 2560
  *              
  * @author      William Sandkvist
- * @version     0.08
- * @date        2019-08-12
+ * @version     0.09
+ * @date        2019-08-13
  *
  *******************************************************************************
  */
@@ -31,30 +33,53 @@ const uint8_t   SUNRISE_ADDR            = 0x68;
 /* 
  * The delay when waiting for responses, in milliseconds.
  * Length based on the documentation, "Modbus on Senseair 
- * Sunrise", headline "1.3 Bus timing", page 4.
+ * Sunrise".
  */
-const int       WAIT                    = 180;
+const int       WAIT_MS                 = 180;
+
+/* Error codes */
+const int COMMUNICATION_ERROR           = (-1);
+const int ILLEGAL_FUNCTION              = 1;
+const int ILLEGAL_DATA_ADDRESS          = 2;
+const int ILLEGAL_DATA_VALUE            = 3;
+
+/* Register Addresses */
+const uint16_t ERROR_STATUS             = 0x0000;
+const uint16_t MEASUREMENT_MODE         = 0x000A;
+const uint16_t START_MEASUREMENT        = 0x0021;
+const uint16_t ABC_TIME                 = 0x0022;
+
+/* Measurement modes */
+const uint16_t CONTINUOUS               = 0x0000;
+const uint16_t SINGLE                   = 0x0001;
+
+/* Delays in milliseconds*/
+const int STABILIZATION_MS              = 35;
+const int WAIT_FOR_PIN_MS               = 2000;
 
 /* Reading period, in milliseconds. Default is 4 seconds */
-int readPeriod = 4000;
+int readPeriodMs = 4000;
 
 /* 
- * Variable for keeping track of time passed, in hours since 
- * last ABC calibration.
+ * Variable for keeping track of how many hours the sensor
+ * has been running. Used for increasing the ABC Time register.
  */
-unsigned long int abc = 0;
+int abc = 1;
 
 /**  
- * Arrays for request, responses and register values 
+ * Arrays for request, responses and register values
  * Sizes based on:
  * MODBUS APPLICATION PROTOCOL SPECIFICATION V1.1b3 
  * Available on the www.modbus.org website
  */
+/* Array for sending requests */
 uint8_t request[256];
+/* Array for receiving responses */
 uint8_t response[256];
+/* Array for storing register values from responses */
 uint16_t values[256];
+/* Array for storing strings from reading objects */
 char device[12];
-
 /* Array for storing sensor state data */
 uint16_t state[12];
 
@@ -81,7 +106,7 @@ int read_holding_registers(uint8_t comAddr, uint16_t regAddr, uint16_t numReg) {
     
   uint8_t numRegHi = (numReg >> 8);
   uint8_t numRegLo = numReg & 0xFF;
-
+  
   /* Define Modbus PDU */
   request[0] = comAddr;
   request[1] = funCode;
@@ -104,37 +129,28 @@ int read_holding_registers(uint8_t comAddr, uint16_t regAddr, uint16_t numReg) {
   /* Number of bytes to wait for */
   int waitBytes = 5 + (numReg * 2);
 
+  /* Time-out variable */
+  unsigned long startTime = millis();
+
   /* Wait for response */
-  int counter = 0;
+  while(SunriseSerial.available() < waitBytes) {
+    /* Time out if it takes more than 180 ms */
+    if(WAIT_MS <= (millis() - startTime)) {
+      /* Check if it is an exception */
+      if(SunriseSerial.available() == 5) {
+        /* Store response bytes into a response array */
+        int responseSize = SunriseSerial.available();
 
-  for(int n = 1 ; n < (waitBytes + 1) ; n++) {
-    while(SunriseSerial.available() < n) {
-      delay(1);
-      counter++;
-
-      /* If the request times-out */
-      if(counter > WAIT) {
-
-        /* If there are 5 bytes available, an exception 
-         * most likely occurred.
-         */
-        if(SunriseSerial.available() == 5) {
-          /* Store response bytes into a response array */
-          int responseSize = SunriseSerial.available();
-
-          for(int o = 0 ; o < responseSize ; o++) {
-            response[o] = SunriseSerial.read();
-          }
-
-          /* Check the response for errors and exceptions */
-          error = _handler(response, funCode, responseSize);
-     
-          return error;
+        for(int n = 0 ; n < responseSize ; n++) {
+          response[n] = SunriseSerial.read();
         }
 
-        /* Otherwise the request just timed out*/
-        return -1;
+        /* Check the response for errors and exceptions */
+        error = _handler(response, funCode, responseSize);
+     
+        return error;
       }
+      return COMMUNICATION_ERROR;
     }
   }
 
@@ -146,14 +162,19 @@ int read_holding_registers(uint8_t comAddr, uint16_t regAddr, uint16_t numReg) {
     response[n] = SunriseSerial.read();
   }
 
-  /* Combine the bytes containing the requested values into words */
-  counter = 0;
-  int slot = 3;
-    while(counter < ((responseSize - 5)/2)) {
-    values[counter] = ((int16_t)(int8_t) response[slot] << 8) | (uint16_t)response[slot + 1];
+  /* Check response for exceptions */
+  error = _handler(response, funCode, responseSize);
 
-    counter++;
-    slot = slot + 2;
+  /* If no error were encountered, combine the bytes containing the requested values into words */
+  if(error == 0) {
+    int counter = 0;
+    int slot = 3;
+      while(counter < ((responseSize - 5)/2)) {
+      values[counter] = ((int16_t)(int8_t) response[slot] << 8) | (uint16_t)response[slot + 1];
+
+      counter++;
+      slot = slot + 2;
+    }
   }
 
   return error;
@@ -205,36 +226,26 @@ int read_input_registers(uint8_t comAddr, uint16_t regAddr, uint16_t numReg) {
   int waitBytes = 5 + (numReg * 2);
 
   /* Wait for response */
-  int counter = 0;
+  /* Time-out variable */
+  unsigned long startTime = millis();
 
-  for(int n = 1 ; n < (waitBytes + 1) ; n++) {
-    while(SunriseSerial.available() < n) {
-      delay(1);
-      counter++;
+  while(SunriseSerial.available() < waitBytes) {
+    /* Time out if it takes more than 180 ms */
+    if(WAIT_MS <= (millis() - startTime)) {
+      if(SunriseSerial.available() == 5) {
+        /* Store response bytes into a response array */
+        int responseSize = SunriseSerial.available();
 
-      /* If the request times-out */
-      if(counter > WAIT) {
-
-        /* If there are 5 bytes available, an exception 
-         * most likely occurred.
-         */
-        if(SunriseSerial.available() == 5) {
-          /* Store response bytes into a response array */
-          int responseSize = SunriseSerial.available();
-
-          for(int o = 0 ; o < responseSize ; o++) {
-            response[o] = SunriseSerial.read();
-          }
-
-          /* Check the response for errors and exceptions */
-          error = _handler(response, funCode, responseSize);
-     
-          return error;
+        for(int n = 0 ; n < responseSize ; n++) {
+          response[n] = SunriseSerial.read();
         }
 
-        /* Otherwise the request just timed out*/
-        return -1;
+        /* Check the response for errors and exceptions */
+        error = _handler(response, funCode, responseSize);
+     
+        return error;
       }
+      return COMMUNICATION_ERROR;
     }
   }
 
@@ -246,14 +257,19 @@ int read_input_registers(uint8_t comAddr, uint16_t regAddr, uint16_t numReg) {
     response[n] = SunriseSerial.read();
   }
 
-  /* Combine the bytes containing the requested values into words */
-  counter = 0;
-  int slot = 3;
-    while(counter < ((responseSize - 5)/2)) {
-    values[counter] = ((int16_t)(int8_t) response[slot] << 8) | (uint16_t)response[slot + 1];
+  /* Check response for exceptions */
+  error = _handler(response, funCode, responseSize);
 
-    counter++;
-    slot = slot + 2;
+  /* If no error were encountered, combine the bytes containing the requested values into words */
+  if(error == 0) {
+    int counter = 0;
+    int slot = 3;
+      while(counter < ((responseSize - 5)/2)) {
+      values[counter] = ((int16_t)(int8_t) response[slot] << 8) | (uint16_t)response[slot + 1];
+
+      counter++;
+      slot = slot + 2;
+    }
   }
 
   return error;
@@ -278,15 +294,19 @@ int write_multiple_registers(uint8_t comAddr, uint16_t regAddr, uint16_t numReg,
 
   uint8_t regAddrHi = (regAddr >> 8);
   uint8_t regAddrLo = regAddr & 0xFF;
-  
+
   uint8_t numRegHi = (numReg >> 8);
   uint8_t numRegLo = numReg & 0xFF;
 
   uint8_t numBytes = numReg * 2;
-  
+
+  /* Check if request fits in buffer */
+  if(numBytes >= 249) {
+    return;
+  }
+
   uint8_t writeValHi;
   uint8_t writeValLo;
-  uint8_t modbusPDU[7 + numBytes];
 
   int requestSize = 7 + numBytes;
 
@@ -324,43 +344,33 @@ int write_multiple_registers(uint8_t comAddr, uint16_t regAddr, uint16_t numReg,
   int waitBytes = 8;
 
   /* Wait for response */
-  counter = 0;
-  
-  for(int n = 1 ; n < (waitBytes + 1) ; n++) {
-    while(SunriseSerial.available() < n) {
-      delay(1);
-      counter++;
+  /* Time-out variable */
+  unsigned long startTime = millis();
 
-      /* If the request times-out */
-      if(counter > WAIT) {
+  while(SunriseSerial.available() < waitBytes) {
+    /* Time out if it takes more than 180 ms */
+    if(WAIT_MS <= (millis() - startTime)) {
+      if(SunriseSerial.available() == 5) {
+        /* Store response bytes into a response array */
+        int responseSize = SunriseSerial.available();
 
-        /* If there are 5 bytes available, an exception 
-         * most likely occurred.
-         */
-        if(SunriseSerial.available() == 5) {
-          /* Store response bytes into a response array */
-          int responseSize = SunriseSerial.available();
-
-          for(int o = 0 ; o < responseSize ; o++) {
-            response[o] = SunriseSerial.read();
-          }
-
-          /* Check the response for errors and exceptions */
-          error = _handler(response, funCode, responseSize);
-     
-          return error;
+        for(int n = 0 ; n < responseSize ; n++) {
+          response[n] = SunriseSerial.read();
         }
 
-        /* Otherwise the request just timed out*/
-        return -1;
+        /* Check the response for errors and exceptions */
+        error = _handler(response, funCode, responseSize);
+     
+        return error;
       }
+      return COMMUNICATION_ERROR;
     }
   }
 
   /* If the request was Successful */
-  /* Store response bytes into a response array */
+  /* Empty buffer and save response */
   int responseSize = SunriseSerial.available();
-  
+
   for(int n = 0 ; n < responseSize ; n++) {
     response[n] = SunriseSerial.read();
   }
@@ -372,9 +382,7 @@ int write_multiple_registers(uint8_t comAddr, uint16_t regAddr, uint16_t numReg,
  * @brief  Reads one of the device's ID objects.
  * 
  * @param  comAddr:      Communication address
- *         regAddr:      Register address
- *         numReg:       Number of registers to write to
- *         returnValues: Array of values to be written to the registers        
+ *         objId:        The type of object that is to be read
  * @retval None
  */
 int read_device_id(uint8_t comAddr, uint8_t objId) {
@@ -383,7 +391,9 @@ int read_device_id(uint8_t comAddr, uint8_t objId) {
 
   /* PDU variables */
   uint8_t funCode = 0x2B;
+
   uint8_t meiType = 0x0E;
+
   uint8_t idCode = 0x04;
 
   /* Define Modbus PDU */
@@ -416,28 +426,26 @@ int read_device_id(uint8_t comAddr, uint8_t objId) {
   int waitBytes = 12 + objLen;
 
   /* Wait for response */
-  int counter = 0;
+  /* Time-out variable */
+  unsigned long startTime = millis();
 
-  for(int n = 1 ; n < (waitBytes + 1) ; n++) {
-    while(SunriseSerial.available() < n) {
-      delay(1);
-      counter++;
-      if(counter > WAIT) {
-        if(SunriseSerial.available() == 5) {
-          /* Store response bytes into a response array */
-          int responseSize = SunriseSerial.available();
+  while(SunriseSerial.available() < waitBytes) {
+    /* Time out if it takes more than 180 ms */
+    if(WAIT_MS <= (millis() - startTime)) {
+      if(SunriseSerial.available() == 5) {
+        /* Store response bytes into a response array */
+        int responseSize = SunriseSerial.available();
 
-          for(int o = 0 ; o < responseSize ; o++) {
-            response[o] = SunriseSerial.read();
-          }
-
-          /* Check the response for errors and exceptions */
-          error = _handler(response, funCode, responseSize);
-     
-          return error;
+        for(int n = 0 ; n < responseSize ; n++) {
+          response[n] = SunriseSerial.read();
         }
-        return -1;
+
+        /* Check the response for errors and exceptions */
+        error = _handler(response, funCode, responseSize);
+     
+        return error;
       }
+      return COMMUNICATION_ERROR;
     }
   }
 
@@ -448,17 +456,18 @@ int read_device_id(uint8_t comAddr, uint8_t objId) {
     response[n] = SunriseSerial.read();
   }
 
+  /* Check response for exceptions */
+  error = _handler(response, funCode, responseSize);
+
   /* Combine the bytes containing the requested values into words */
   int objLength = response[9];
-  counter = 0;
   int slot = 10;
-    while(counter < objLength) {
-    device[counter] = response[slot];
+  for(int n = 0 ; n < objLength ; n++) {
+    device[n] = response[slot];
 
-    counter++;
     slot++;
   }
-  device[counter] = '\0';
+  device[objLength] = '\0';
 
   return error;
 }
@@ -466,9 +475,9 @@ int read_device_id(uint8_t comAddr, uint8_t objId) {
 /**
  * @brief  A handler for possible exceptions and errors.
  * 
- * @param  pdu[]:       An array containing the response from a request
- *         funCode:     The function code used for the request
- *         len:         The length of the pdu
+ * @param  pdu[]: An array containing the response from a request
+ *         funCode: The function code used for the request
+ *         len: The length of the pdu
  * @retval  -1 for incorrect CRC, 0 on success, 1 for Illegal
  *          Function, 2 for Illegal Data Address, and 3 for
  *          Illegal Data Value
@@ -480,34 +489,28 @@ int _handler(uint8_t pdu[], uint8_t funCode, int len) {
   /* Function variables */
   uint8_t exceptionFunCode = funCode + 0x80; 
 
-  /* Exception codes */
-  const uint8_t illegalFunction = 0x01;
-  const uint8_t illegalDataAddress = 0x02;
-  const uint8_t illegalDataValue = 0x03;
-
   /* Check for corrupt data in the response */
   uint16_t crc = _generate_crc(pdu, (len - 2));
   uint8_t crcHi = (crc >> 8);
   uint8_t crcLo = crc & 0xFF;
 
   if(crcLo != pdu[len - 2] || crcHi != pdu[len - 1]) {
-    error = -1;
-    return error;
+    return COMMUNICATION_ERROR;
   }
 
   /* Check response for exceptions */  
   if(pdu[1] == exceptionFunCode) {
     switch (pdu[2]) {
-      case illegalFunction:
-        error = 1;
+      case ILLEGAL_FUNCTION:
+        error = ILLEGAL_FUNCTION;
         break;
 
-      case illegalDataAddress:
-        error = 2;
+      case ILLEGAL_DATA_ADDRESS:
+        error = ILLEGAL_DATA_ADDRESS;
         break;
 
-      case illegalDataValue:
-        error = 3;
+      case ILLEGAL_DATA_VALUE:
+        error = ILLEGAL_DATA_VALUE;
         break;
 
       default:
@@ -520,8 +523,8 @@ int _handler(uint8_t pdu[], uint8_t funCode, int len) {
 /**
  * @brief  Computes a Modbus RTU message CRC, for a given message.
  * 
- * @param  pdu[]:     An array containing the message
- *         len:       The length of the array
+ * @param  pdu[]: An array containing the message
+ *         len: the length of the array
  * @note   The bytes in the return value needs to be switched for
  *         them to be in the right order in the message.
  * @retval The CRC for the message
@@ -566,6 +569,12 @@ void setup() {
 
   Serial.println("Initialization complete \n");
 
+  /* Drive EN pin HIGH */
+  digitalWrite(SUNRISE_EN, HIGH);
+
+  /* Wait for sensor start-up and stabilization */
+  delay(STABILIZATION_MS);
+
   /* Read the sensor's Device ID */
   Serial.println("Sensor's Device ID");
   read_sensor_id(SUNRISE_ADDR);
@@ -578,12 +587,14 @@ void setup() {
 
   /* Change measurement mode if continuous */
   change_measurement_mode(SUNRISE_ADDR);
-
+  
   /* Initial measurement */
   Serial.println("Inital Measurement");
   init_measurement(SUNRISE_ADDR);
 
-  delay(readPeriod);
+  digitalWrite(SUNRISE_EN, LOW);
+
+  delay(readPeriodMs);
 }
 
 /**
@@ -631,10 +642,9 @@ void read_sensor_id(uint8_t target) {
  */
 void read_sensor_config(uint8_t target) {
   /* Function variables */
-  uint16_t regAddr = 0x000A;
   uint16_t numReg = 0x0003;
 
-  if(read_holding_registers(target, regAddr, numReg) != 0) {
+  if(read_holding_registers(target, MEASUREMENT_MODE, numReg) != 0) {
     Serial.println("EXCEPTION: Failed to read Sensor Configurations");
     return;
   }
@@ -651,11 +661,11 @@ void read_sensor_config(uint8_t target) {
   Serial.print("Measurement Period: ");
   Serial.print(measPeriod);
   Serial.println(" sec");
-  readPeriod = measPeriod * 1000;
+  readPeriodMs = measPeriod * 1000;
 
   /* Read measurement samples */
   Serial.print("Number of Samples: ");
-  Serial.println(measSamples); 
+  Serial.println(measSamples);
 }
 
 /**
@@ -670,33 +680,27 @@ void read_sensor_config(uint8_t target) {
  */
 void change_measurement_mode(uint8_t target) {
   /* Function variables */
-  uint16_t regAddr = 0x000A;
-
   uint16_t numReg = 0x0001;
 
-  uint16_t continuous = 0x0000;
-  uint16_t single[] = {0x0001};
+  uint16_t change[] = {SINGLE};
 
-  if(read_holding_registers(target, regAddr, numReg) != 0) {
+  if(read_holding_registers(target, MEASUREMENT_MODE, numReg) != 0) {
     Serial.println("EXCEPTION: Faled to read Measurement Mode");
     Serial.println("Failed to change Measurement Mode");
-    while(true) {
-      delay(600000);
-    }
+    /* FATAL ERROR */
+    while(true); 
   }
 
-  if(values[0] == continuous) {
+  if(values[0] != SINGLE) {
     Serial.println("Changing Measurement Mode to Single...");
-    if(write_multiple_registers(target, regAddr, numReg, single) != 0) {
+    if(write_multiple_registers(target, MEASUREMENT_MODE, numReg, change) != 0) {
       Serial.println("EXCEPTION: Failed to change Measurement Mode");
-      while(true) {
-        delay(600000);
-      }
+      /* FATAL ERROR */
+      while(true);
     }
     Serial.println("Sensor restart is required to apply changes");
-    while(true) {
-      delay(600000);
-    }
+    /* FATAL ERROR */
+    while(true);
   }
 }
 
@@ -713,57 +717,49 @@ void change_measurement_mode(uint8_t target) {
  */
 void init_measurement(uint8_t target) {
   /* Function variables */
-  uint16_t regAddrCmd = 0x0021;
   uint16_t numRegCmd = 0x0001;
+  uint16_t startCommand[] = {1};
 
-  uint16_t regAddrRead = 0x0000;
   uint16_t numRegRead = 0x0004;
 
-  uint16_t regAddrState = 0x0022;
   uint16_t numRegState = 0x000C;
 
   /* Drive EN pin HIGH */
   digitalWrite(SUNRISE_EN, HIGH);
 
-  /* Wait for sensor start-up and stabilization, default 35 ms */
-  delay(35);
+  /* Wait for sensor start-up and stabilization */
+  delay(STABILIZATION_MS);
 
   /* Start measurement command to HR34 */
-  if(write_multiple_registers(target, regAddrCmd, numRegCmd, {1}) != 0) {
+  if(write_multiple_registers(target, START_MEASUREMENT, numRegCmd, startCommand) != 0) {
     Serial.println("EXCEPTION: Failed to send measurement command");
     digitalWrite(SUNRISE_EN, LOW);
-    while(true) {
-      delay(600000);
-    }
+    /* FATAL ERROR */
+    while(true);
   }
 
   /* Wait until ready pin goes low, 2 sec default */
-  delay(2000);
+  delay(WAIT_FOR_PIN_MS);
 
   /* Read values */
-  if(read_input_registers(target, regAddrRead, numRegRead) != 0) {
+  if(read_input_registers(target, ERROR_STATUS, numRegRead) != 0) {
     Serial.println("EXCEPTION: Failed to read Measurements");
     digitalWrite(SUNRISE_EN, LOW);
-    while(true) {
-      delay(600000);
-    }
+    /* FATAL ERROR */
+    while(true);
   }
   /* Read CO2 concentration */
-  Serial.print("CO2: ");
-  Serial.print(values[3]);
-  Serial.println(" ppm");
+  uint16_t co2Val = values[3];
 
   /* Read error status */
-  Serial.print("Error Status: 0x");
-  Serial.println(values[0], HEX);
+  uint16_t eStatus = values[0];
 
   /* Read sensor state data from HR56-HR46 and save it for next measurement */
-  if(read_holding_registers(target, regAddrState, numRegState) != 0) {
+  if(read_holding_registers(target, ABC_TIME, numRegState) != 0) {
     Serial.println("EXCEPTION: Failed to read Status");
     digitalWrite(SUNRISE_EN, LOW);
-    while(true) {
-      delay(600000);
-    }
+    /* FATAL ERROR */
+    while(true);
   }
   
   for(int n = 0 ; n < 12 ; n++) {
@@ -773,6 +769,13 @@ void init_measurement(uint8_t target) {
   /* Drive EN pin LOW */
   digitalWrite(SUNRISE_EN, LOW);
 
+  /* Print values */
+  Serial.print("CO2: ");
+  Serial.print(co2Val);
+  Serial.println(" ppm");
+
+  Serial.print("Error Status: 0x");
+  Serial.println(eStatus, HEX);
   Serial.println();
 }
 
@@ -787,20 +790,17 @@ void init_measurement(uint8_t target) {
  */
 void read_sensor_measurements(uint8_t target) {
   /* Function variables */
-  uint16_t regAddrCmd = 0x0021;
   uint16_t numRegCmd = 0x000D;
 
-  uint16_t regAddrRead = 0x0000;
   uint16_t numRegRead = 0x0004;
 
-  uint16_t regAddrState = 0x0022;
   uint16_t numRegState = 0x000C;
 
   /*Drive EN pin HIGH */
   digitalWrite(SUNRISE_EN, HIGH);
 
-  /* Wait for sensor start-up and stabilization, default 35 ms*/
-  delay(35);
+  /* Wait for sensor start-up and stabilization */
+  delay(STABILIZATION_MS);
     
 
   /* Write measurement command and state data to HR34-HR46 */
@@ -810,33 +810,30 @@ void read_sensor_measurements(uint8_t target) {
   for(int n = 0 ; n < 12 ; n++) {
     measCommand[n+1] = state[n];
   }
-  if(write_multiple_registers(target, regAddrCmd, numRegCmd, measCommand) != 0) {
+  if(write_multiple_registers(target, START_MEASUREMENT, numRegCmd, measCommand) != 0) {
     Serial.println("EXCEPTION: Failed to send measurement command");
     digitalWrite(SUNRISE_EN, LOW);
     return;
   }
 
   /* Wait for ready pin to go low, 2 sec default */
-  delay(2000);
+  delay(WAIT_FOR_PIN_MS);
 
   /* Read values */
-  if(read_input_registers(target, regAddrRead, numRegRead) != 0) {
+  if(read_input_registers(target, ERROR_STATUS, numRegRead) != 0) {
     Serial.println("EXCEPTION: Failed to read Measurements");
     digitalWrite(SUNRISE_EN, LOW);
     return;
   }
+
   /* Read CO2 concentration */
-  Serial.print("CO2: ");
-  Serial.print(values[3]);
-  Serial.println(" ppm");
+  uint16_t co2Val = values[3];
 
   /* Read error status */
-  Serial.print("Error Status: 0x");
-  Serial.println(values[0], HEX);
-
+  uint16_t eStatus = values[0];
 
   /* Read sensor state data from HR56-HR46 and save it for next measurement */
-  if(read_holding_registers(target, regAddrState, numRegState)) {
+  if(read_holding_registers(target, ABC_TIME, numRegState)) {
     Serial.println("EXCEPTION: Failed to read Status");
     digitalWrite(SUNRISE_EN, LOW);
     return;
@@ -847,6 +844,14 @@ void read_sensor_measurements(uint8_t target) {
 
   /* Drive EN pin low */
   digitalWrite(SUNRISE_EN, LOW);
+
+  /* Print values */
+  Serial.print("CO2: ");
+  Serial.print(co2Val);
+  Serial.println(" ppm");
+
+  Serial.print("Error Status: 0x");
+  Serial.println(eStatus, HEX);
 }
 
 /**
@@ -862,10 +867,16 @@ int increase_abc(uint8_t target) {
   uint16_t regAddr = 0x0022;
   uint16_t numReg = 0x0001;
 
+  /*Drive EN pin HIGH */
+  digitalWrite(SUNRISE_EN, HIGH);
+
+  /* Wait for sensor start-up and stabilization */
+  delay(STABILIZATION_MS);
+
   /* Read current value from HR35 */
   if(read_holding_registers(target, regAddr, numReg) != 0) {
     Serial.println("EXCEPTION: Failed to read register value");
-    abc = 3600000;
+    abc--;
     return;
   }
 
@@ -874,11 +885,14 @@ int increase_abc(uint8_t target) {
   /* Write new value back to HR35 */
   if(write_multiple_registers(target, regAddr, numReg, newValue) != 0) {
     Serial.println("EXCEPTION: Failed to write to register command");
-    abc = 3600000;
+    abc--;
     return;
   }
 
-  Serial.println("\n ABC Time updated\n");
+  /* Drive EN pin low */
+  digitalWrite(SUNRISE_EN, LOW);
+
+  Serial.println("\nABC Time updated\n");
 }
 
 /**
@@ -891,27 +905,18 @@ int increase_abc(uint8_t target) {
 void loop() {
   static int pin_value = HIGH;
 
+  /* When an hour has passed, increase ABC Time */  
+  if((abc*3600000) <= millis()) {
+    increase_abc(SUNRISE_ADDR);
+    abc++;
+  }
+
   /* Read measurements */
   read_sensor_measurements(SUNRISE_ADDR);
 
   /* Delay between readings */
   Serial.println("\nWaiting...\n");
-  delay(readPeriod);
-
-  /* 
-   *  The read function takes about 2190 ms to run. So the abc
-   *  variable has to be increased by  2 + readPeriod ms.  
-   */
-  abc += (readPeriod + 2190);
-
-  /* 
-   *  When abc value has reached 3 600 000  
-   *  HR35 has to be increased by 1.
-   */
-  if(abc >= 3600000) {
-    abc = 0;
-    increase_abc(SUNRISE_ADDR);
-  }
+  delay(readPeriodMs);
   
   /* Indicate working state */
   digitalWrite(LED_BUILTIN, pin_value);
