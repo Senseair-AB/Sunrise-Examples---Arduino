@@ -669,7 +669,7 @@ void read_sensor_config(uint8_t target) {
   uint16_t measPeriod = values[1];
   uint16_t measSamples = values[2];
 
-  /* Read measurement mode (0 = Continuous, 1 = Single) */
+  /* Read measurement mode */
   Serial.print("Measurement Mode: ");
   Serial.println(measMode);
 
