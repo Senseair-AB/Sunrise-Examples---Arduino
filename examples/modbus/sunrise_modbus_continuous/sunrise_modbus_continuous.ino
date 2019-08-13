@@ -133,6 +133,11 @@ int read_holding_registers(uint8_t comAddr, uint16_t regAddr, uint16_t numReg) {
      
         return error;
       }
+      /* Clear buffer */
+      while(SunriseSerial.available() > 0) {
+        SunriseSerial.read();
+      }
+      
       return COMMUNICATION_ERROR;
     }
   }
@@ -228,6 +233,11 @@ int read_input_registers(uint8_t comAddr, uint16_t regAddr, uint16_t numReg) {
      
         return error;
       }
+      /* Clear buffer */
+      while(SunriseSerial.available() > 0) {
+        SunriseSerial.read();
+      }
+      
       return COMMUNICATION_ERROR;
     }
   }
@@ -346,6 +356,11 @@ int write_multiple_registers(uint8_t comAddr, uint16_t regAddr, uint16_t numReg,
      
         return error;
       }
+      /* Clear buffer */
+      while(SunriseSerial.available() > 0) {
+        SunriseSerial.read();
+      }
+      
       return COMMUNICATION_ERROR;
     }
   }
@@ -428,6 +443,11 @@ int read_device_id(uint8_t comAddr, uint8_t objId) {
      
         return error;
       }
+      /* Clear buffer */
+      while(SunriseSerial.available() > 0) {
+        SunriseSerial.read();
+      }
+      
       return COMMUNICATION_ERROR;
     }
   }
