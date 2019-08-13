@@ -2,7 +2,7 @@
  *******************************************************************************
  * @copyright   Copyright (C) by SenseAir AB. All rights reserved.
  * @file        sunrise_modbus_continuous.ino
- * @brief       Example functions to perform different the different operations 
+ * @brief       Example functions to perform the different operations 
  *              descrived in the "Modbus on Senseair Sunrise" documentation 
  *              (available on the www.senseair.com website). This example mainly 
  *              covers operations in continuous measurement mode.
@@ -643,7 +643,7 @@ void read_sensor_config(uint8_t target) {
   uint16_t measPeriod = values[1];
   uint16_t measSamples = values[2];
 
-  /* Read measurement mode (0 = Continuous, 1 = Single) */
+  /* Read measurement mode */
   Serial.print("Measurement Mode: ");
   Serial.println(measMode);
 
