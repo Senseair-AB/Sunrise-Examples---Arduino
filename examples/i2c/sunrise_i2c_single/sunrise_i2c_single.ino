@@ -17,7 +17,7 @@
  *******************************************************************************
  */
 
-#include <I2C.h>
+#include <Wire.h>
 #include <SoftwareSerial.h>
 
 /* Define serial EN pin */
@@ -27,7 +27,7 @@ const int       SUNRISE_EN              = 8;
 const uint8_t   SUNRISE_ADDR            = 0x68;
 
 /* Amount of wakeup attempts before time-out */
-const int       ATTEMPTS                 = 50;
+const int       ATTEMPTS                 = 5;
 
 /* Register Addresses */
 const uint8_t ERROR_STATUS             = 0x01;
@@ -46,14 +46,18 @@ const int WAIT_FOR_PIN_MS               = 2000;
 /* Reading period, in milliseconds. Default is 4 seconds */
 int readPeriodMs = 4000;
 
-/* 
- * Variable for keeping track of how many hours the sensor
- * has been running. Used for increasing the ABC Time register.
- */
-int abc = 1;
 
 /* Array for storing sensor state data */
 uint8_t state[24];
+
+
+/* Initialize I2C bus and pins */
+void  reInitI2C() {
+  /* Initialize I2C and use default pins defined for the board */
+  Wire.begin();
+  /* Setup I2C clock to 100kHz */
+  Wire.setClock(100000);  
+}
 
 /** 
  * @brief  Wakes up the sensor by initializing a write operation
@@ -63,17 +67,24 @@ uint8_t state[24];
  * @note   This example shows a simple way to wake up the sensor.
  * @retval true if successful, false if failed
  */
-bool _wakeup(uint8_t target) {
-  int counter = 0;
-
-  /* On success the write function will return 0 */
-  while(I2c.write(target, 0) != 0) {
-    counter++;
-    if(counter == ATTEMPTS) {
-      return false;
-    }
-  }
-  return true;
+bool _wakeup(uint8_t target)
+{
+  int attemps = ATTEMPTS;
+  int error;
+ 
+  do {
+    uint8_t byte_0;    
+    /* */
+    Wire.beginTransmission(target);
+    error = Wire.endTransmission(true);
+  } while(((error != 0 /*success */) && (error != 2 /*Received NACK on transmit of address*/) && (error != 1 /* BUG in STM32 library*/)) && (--attemps > 0)); 
+  /* STM32 driver can stack under some conditions */
+  if(error == 4) {
+    /* Reinitialize I2C*/
+    reInitI2C();
+    return false;
+  } 
+  return (attemps > 0);
 }
 
 /**
@@ -86,21 +97,14 @@ void setup()
   pinMode(LED_BUILTIN, OUTPUT);
   digitalWrite(LED_BUILTIN, HIGH);
 
-  /*
-   * Currently the program only works if the EN pin is defined as INPUT, 
-   * even though it should be defined as OUTPUT
-   */
-  pinMode(SUNRISE_EN, INPUT);
-  
+  pinMode(SUNRISE_EN, OUTPUT);
+  digitalWrite(SUNRISE_EN, HIGH);
+  /* Wait for sensor start-up and stabilization */
+  delay(STABILIZATION_MS);
   /* I2C */
   /* Initialize I2C and use default pins defined for the board */
-  I2c.begin();
-
-  /*  
-   * Set I2C clock to 100kHz 
-   * Based on Data rate from documentation
-   */
-  I2c.setSpeed(0);  
+  reInitI2C();
+ 
   Serial.begin(115200);
 
   Serial.println("Initialization complete\n");
@@ -112,7 +116,9 @@ void setup()
 
   /* Change measurement mode if continuous */
   change_measurement_mode(SUNRISE_ADDR);
-
+ 
+  digitalWrite(SUNRISE_EN, LOW); 
+   
   /* Initial measurement */
   Serial.println("Saving Sensor State");
   save_state(SUNRISE_ADDR);
@@ -124,7 +130,7 @@ void setup()
  * @brief  Reads and prints the sensor's current measurement mode,
  *         measurement period and number of samples.
  * 
- * @param  target:      The sensor's communication address
+ * @param  target: The sensor's communication address
  * @note   This example shows a simple way to read the sensor's
  *         measurement configurations.
  * @retval None
@@ -141,7 +147,8 @@ void read_sensor_config(uint8_t target) {
   }
 
   /* Request values */
-  if((error = I2c.read(target, MEASUREMENT_MODE, numBytes)) != 0) {
+  error = Wire.requestFrom((uint8_t)target, (uint8_t)numBytes /* how many bytes */, (uint32_t)MEASUREMENT_MODE /* from address*/, (uint8_t)1/* Address size - 1 byte*/, true /* STOP*/);    
+  if(error != numBytes ) {
     Serial.print("Failed to write to target. Error code : ");
     Serial.println(error);
     return;
@@ -149,29 +156,27 @@ void read_sensor_config(uint8_t target) {
 
   /* Read values */
   /* Measurement mode */
-  uint8_t measMode = I2c.receive();
+  uint8_t measMode = Wire.read();
 
   /* Measurement period */
-  uint8_t byteHi = I2c.receive();
-  uint8_t byteLo = I2c.receive();
+  uint8_t byteHi = Wire.read();
+  uint8_t byteLo = Wire.read();
   uint16_t measPeriod = ((int16_t)(int8_t) byteHi << 8) | (uint16_t)byteLo;
-  
+
   /* Number of samples */
-  byteHi = I2c.receive();
-  byteLo = I2c.receive();
+  byteHi = Wire.read();
+  byteLo = Wire.read();
   uint16_t numSamples = ((int16_t)(int8_t) byteHi << 8) | (uint16_t)byteLo;
 
   Serial.print("Measurement Mode: ");
   Serial.println(measMode);
+  readPeriodMs = measPeriod * 1000;
 
   Serial.print("Measurement Period: ");
   Serial.println(measPeriod);
-  readPeriodMs = measPeriod * 1000;
 
   Serial.print("Number of Samples: ");
-  Serial.println(numSamples);
-
-  
+  Serial.println(numSamples);  
 }
 
 /**
@@ -187,7 +192,7 @@ void read_sensor_config(uint8_t target) {
 void change_measurement_mode(uint8_t target) {
   /* Function variables */
   int error;
-  int numReg = 1;
+  int numBytes = 1;
   
   /* Wakeup */
   if(!(_wakeup(target))) {
@@ -197,7 +202,8 @@ void change_measurement_mode(uint8_t target) {
   }
 
   /* Read Value */
-  if(error = I2c.read(target, MEASUREMENT_MODE, numReg) != 0) {
+  error = Wire.requestFrom((uint8_t)target, (uint8_t)numBytes /* how many bytes */, (uint32_t)MEASUREMENT_MODE /* from address*/, (uint8_t)1/* Address size - 1 byte*/, true /* STOP*/);    
+  if(error != numBytes ) {  
     Serial.print("Failed to read measurement mode. Error code: ");
     Serial.println(error);
     /* FATAL ERROR */
@@ -205,24 +211,32 @@ void change_measurement_mode(uint8_t target) {
   }
 
   /* Change mode if continuous */
-  if(I2c.receive() != SINGLE) {
+  if(Wire.read() != SINGLE) {
+    Serial.println("Changing Measurement Mode to Single...");
     /* Wakeup */
-    if(_wakeup(target)) {
+    if(!_wakeup(target)) {
       Serial.print("Failed to wake up sensor.");
       /* FATAL ERROR */
       while(true);
    }
+    Wire.beginTransmission(target);
+    Wire.write(MEASUREMENT_MODE);
+    Wire.write(SINGLE);
+    error = Wire.endTransmission(true);
     
-    Serial.println("Changing Measurement Mode to Single...");
-    if((error = I2c.write(target, MEASUREMENT_MODE, SINGLE)) != 0) {
+    if(error != 0) {
       Serial.print("Failed to send request. Error code: ");
       Serial.println(error); 
       /* FATAL ERROR */
       while(true);
     }
     Serial.println("Sensor restart is required to apply changes");
-    /* FATAL ERROR */
-    while(true);
+     /* Turn-off sensor */
+    digitalWrite(SUNRISE_EN, LOW);
+    /* Wait for sensor restart */
+    delay(STABILIZATION_MS);
+    /* Turn-on sensor */
+    digitalWrite(SUNRISE_EN, HIGH);
   }
 }
 
@@ -239,7 +253,7 @@ void save_state(uint8_t target) {
   /* Function variables */
   int error;
 
-  int numReg = 24;
+  int numBytes = 24;
 
   /* Drive EN pin HIGH */
   digitalWrite(SUNRISE_EN, HIGH);
@@ -257,7 +271,8 @@ void save_state(uint8_t target) {
   }
 
   /* Request state data */
-  if((error =I2c.read(target, ABC_TIME, numReg)) != 0) {
+  error = Wire.requestFrom((uint8_t)target, (uint8_t)numBytes /* how many bytes */, (uint32_t)ABC_TIME /* from address*/, (uint8_t)1/* Address size - 1 byte*/, true /* STOP*/);    
+  if(error != numBytes ) { 
     Serial.print("Failed to read measurements command. Error code: ");
     Serial.println(error);
     digitalWrite(SUNRISE_EN, LOW);
@@ -266,8 +281,8 @@ void save_state(uint8_t target) {
   }
 
   /* Read and save state data */
-  for(int n = 0 ; n < numReg ; n++) {
-    state[n] = I2c.receive();
+  for(int n = 0 ; n < numBytes ; n++) {
+    state[n] = Wire.read();
   }
 
   /* Drive EN pin LOW */
@@ -314,7 +329,13 @@ void read_sensor_measurements(uint8_t target) {
   }
 
   /* Write measurement command and sensor state to 0xC3 */
-  if((error = I2c.write(target, START_MEASUREMENT, cmdArray, numRegCmd)) != 0) {
+  Wire.beginTransmission(target);
+  Wire.write(START_MEASUREMENT);
+  for(int reg_n =0; reg_n < numRegCmd; reg_n++) {
+    Wire.write(cmdArray[reg_n]);
+  }
+  error = Wire.endTransmission(true);
+  if(error != 0) {
     Serial.print("Failed to send measurement command. Error code: ");
     Serial.println(error);
     digitalWrite(SUNRISE_EN, LOW);
@@ -332,27 +353,28 @@ void read_sensor_measurements(uint8_t target) {
   }
 
   /* Request values */
-  if(I2c.read(target, ERROR_STATUS, numRegRead) != 0) {
-    Serial.print("Failed to read measurements command. Error code: ");
+  error = Wire.requestFrom((uint8_t)target, (uint8_t)numRegRead /* how many bytes */, (uint32_t)ERROR_STATUS /* from address*/, (uint8_t)1/* Address size - 1 byte*/, true /* STOP*/);    
+  if(error != numRegRead ) {  
+    Serial.print("Failed to read values. Error code: ");
     Serial.println(error);
     digitalWrite(SUNRISE_EN, LOW);
     return;
   }
 
   /* Read values */
-  /* Error Status */
-  uint8_t eStatus = I2c.receive();
+  /* Error status */
+  uint8_t eStatus = Wire.read();
 
   /* Reserved */
-  uint8_t byteHi = I2c.receive();
-  uint8_t byteLo = I2c.receive();
+  uint8_t byteHi = Wire.read();
+  uint8_t byteLo = Wire.read();
 
-  byteHi = I2c.receive();
-  byteLo = I2c.receive();
+  byteHi = Wire.read();
+  byteLo = Wire.read();
 
   /* CO2 value */
-  byteHi = I2c.receive();
-  byteLo = I2c.receive();
+  byteHi = Wire.read();
+  byteLo = Wire.read();
   uint16_t co2Val = ((int16_t)(int8_t) byteHi << 8) | (uint16_t)byteLo;
 
   /* Wakeup */
@@ -363,7 +385,8 @@ void read_sensor_measurements(uint8_t target) {
   }
 
   /* Read sensor state data from 0xC4-0xDB and save it for next measurement */
-  if(I2c.read(target, ABC_TIME, numRegState) != 0) {
+  error = Wire.requestFrom((uint8_t)target, (uint8_t)numRegState /* how many bytes */, (uint32_t)ABC_TIME /* from address*/, (uint8_t)1/* Address size - 1 byte*/, true /* STOP*/); 
+  if(error != numRegState) {
     Serial.print("Failed to read measurements command. Error code: ");
     Serial.println(error);
     digitalWrite(SUNRISE_EN, LOW);
@@ -371,7 +394,7 @@ void read_sensor_measurements(uint8_t target) {
   }
   
   for(int n = 0 ; n < numRegState ; n++) {
-    state[n] = I2c.receive();
+    state[n] = Wire.read();
   }
 
   /* Drive EN pin LOW */
@@ -387,76 +410,6 @@ void read_sensor_measurements(uint8_t target) {
   Serial.println();
 }
 
-/**
- * @brief  Increases the ABC Time by one.
- * 
- * @param  target: The sensor's communication address
- * @note   This example shows a simple way to 
- *         increase the sensor's ABC Time
- * @retval None
- */
-int increase_abc(uint8_t target) {
-  /* Function variables */
-  int error = 0;
-  int numReg = 2;
-
-  /*Drive EN pin HIGH */
-  digitalWrite(SUNRISE_EN, HIGH);
-
-  /* Wait for sensor start-up and stabilization */
-  delay(STABILIZATION_MS);
-
-  /* Wakeup */
-  if(!(_wakeup(target))) {
-    Serial.print("Failed to wake up sensor.");
-    digitalWrite(SUNRISE_EN, LOW);
-    abc--;
-    return;
-  }
-
-  /* Read current ABC Time value from 0x88 - 0x89 */
-  if((error = I2c.read(target, ABC_TIME, numReg)) != 0) {
-    Serial.print("Failed to send read request. Error code: ");
-    Serial.println(error);
-    digitalWrite(SUNRISE_EN, LOW);
-    abc--;
-    return;
-  }
-
-  /* Read value */
-  uint8_t byteHi = I2c.receive();
-  uint8_t byteLo = I2c.receive();
-  uint16_t abcTime = ((int16_t)(int8_t) byteHi << 8) | (uint16_t)byteLo;
-
-  /* Increase current ABC Time by one */
-  abcTime++;
-
-  uint8_t abcHi = (abcTime >> 8);
-  uint8_t abcLo = abcTime & 0xFF;
-
-  uint8_t newAbc[] = {abcHi, abcLo};
-
-  /* Wakeup */
-  if(!(_wakeup(target))) {
-    Serial.print("Failed to wake up sensor.");
-    digitalWrite(SUNRISE_EN, LOW);
-    abc--;
-    return;
-  }
-
-  /* Write new value back to HR35 */
-  if((error = I2c.write(target, ABC_TIME, newAbc, numReg)) != 0) {
-    Serial.print("Failed to write to register. Error code: ");
-    Serial.println(error);
-    abc--;
-    return;
-  }
-
-  /* Drive EN pin low */
-  digitalWrite(SUNRISE_EN, LOW);
-
-  Serial.println("\nABC Time updated\n");
-}
 
 /**
  * @brief  The main function loop. Reads the sensor's current
@@ -467,7 +420,19 @@ int increase_abc(uint8_t target) {
  */
 void loop() {
   static int pin_value = HIGH;
+  static unsigned long last_abc_stamp = 0;
 
+  /* When an hour has passed, increase ABC Time */  
+  if(3600000 < (unsigned long)((long)millis() - (long)last_abc_stamp)) {
+    /* Use ABC time stored in the sensor state */
+    uint16_t abc_time = ((int16_t)(int8_t) state[0] << 8) | (uint16_t)state[1];
+    abc_time = abc_time + 1;
+    state[0] = abc_time >> 8;
+    state[1] = abc_time & 0x00FF;
+    
+    last_abc_stamp = millis();
+    Serial.println("ABC time incremented.");
+  }
   /* Read measurements */
   read_sensor_measurements(SUNRISE_ADDR);
 
@@ -475,11 +440,6 @@ void loop() {
   Serial.println("\nWaiting...\n");
   delay(readPeriodMs);
 
-  /* When an hour has passed, increase ABC Time */  
-  if((abc*3600000) <= millis()) {
-    increase_abc(SUNRISE_ADDR);
-    abc++;
-  }
 
  /* Indicate working state */
   digitalWrite(LED_BUILTIN, pin_value);

@@ -9,19 +9,19 @@
  * @details     Tested on Arduino Mega 2560
  *              
  * @author      William Sandkvist
- * @version     0.04
+ * @version     0.05
  * @date        2019-08-13
  * 
  *******************************************************************************
  */
 
-#include <I2C.h>
+#include <Wire.h>
 
 /* Sunrise communication address, both for Modbus and I2C */
 const uint8_t   SUNRISE_ADDR            = 0x68;
 
 /* Amount of wakeup attempts before time-out */
-const int       ATTEMPTS                 = 50;
+const int       ATTEMPTS                 = 5;
 
 /* Register Addresses */
 const uint8_t ERROR_STATUS             = 0x01;
@@ -34,6 +34,15 @@ const uint16_t SINGLE                   = 0x0001;
 /* Reading period, in milliseconds. Default is 4 seconds */
 int readPeriodMs = 4000;
 
+/* Initialize I2C bus and pins */
+void  reInitI2C() {
+  /* Initialize I2C and use default pins defined for the board */
+  Wire.begin();
+  /* Setup I2C clock to 100kHz */
+  Wire.setClock(100000);  
+}
+
+
 /** 
  * @brief  Wakes up the sensor by initializing a write operation
  *         with no data.
@@ -42,18 +51,26 @@ int readPeriodMs = 4000;
  * @note   This example shows a simple way to wake up the sensor.
  * @retval true if successful, false if failed
  */
-bool _wakeup(uint8_t target) {
-  int counter = 0;
-
-  /* On success the write function will return 0 */
-  while(I2c.write(target, 0) != 0) {
-    counter++;
-    if(counter == ATTEMPTS) {
-      return false;
-    }
-  }
-  return true;
+bool _wakeup(uint8_t target)
+{
+  int attemps = ATTEMPTS;
+  int error;
+ 
+  do {
+    uint8_t byte_0;    
+    /* */
+    Wire.beginTransmission(target);
+    error = Wire.endTransmission(true);
+  } while(((error != 0 /*success */) && (error != 2 /*Received NACK on transmit of address*/) && (error != 1 /* BUG in STM32 library*/)) && (--attemps > 0)); 
+  /* STM32 driver can stack under some conditions */
+  if(error == 4) {
+    /* Reinitialize I2C*/
+    reInitI2C();
+    return false;
+  } 
+  return (attemps > 0);
 }
+
 
 /**
  * @brief  This function runs once at the start.
@@ -67,10 +84,8 @@ void setup()
 
   /* I2C */
   /* Initialize I2C and use default pins defined for the board */
-  I2c.begin();
-
-  /* Set I2C clock to 100kHz */
-  I2c.setSpeed(0);  
+  reInitI2C();
+ 
   Serial.begin(115200);
 
   Serial.println("Initialization complete\n");
@@ -107,7 +122,8 @@ void read_sensor_config(uint8_t target) {
   }
 
   /* Request values */
-  if((error = I2c.read(target, MEASUREMENT_MODE, numBytes)) != 0) {
+  error = Wire.requestFrom((uint8_t)target, (uint8_t)numBytes /* how many bytes */, (uint32_t)MEASUREMENT_MODE /* from address*/, (uint8_t)1/* Address size - 1 byte*/, true /* STOP*/);    
+  if(error != numBytes ) {
     Serial.print("Failed to write to target. Error code : ");
     Serial.println(error);
     return;
@@ -115,16 +131,16 @@ void read_sensor_config(uint8_t target) {
 
   /* Read values */
   /* Measurement mode */
-  uint8_t measMode = I2c.receive();
+  uint8_t measMode = Wire.read();
 
   /* Measurement period */
-  uint8_t byteHi = I2c.receive();
-  uint8_t byteLo = I2c.receive();
+  uint8_t byteHi = Wire.read();
+  uint8_t byteLo = Wire.read();
   uint16_t measPeriod = ((int16_t)(int8_t) byteHi << 8) | (uint16_t)byteLo;
 
   /* Number of samples */
-  byteHi = I2c.receive();
-  byteLo = I2c.receive();
+  byteHi = Wire.read();
+  byteLo = Wire.read();
   uint16_t numSamples = ((int16_t)(int8_t) byteHi << 8) | (uint16_t)byteLo;
 
   Serial.print("Measurement Mode: ");
@@ -151,7 +167,7 @@ void read_sensor_config(uint8_t target) {
 void change_measurement_mode(uint8_t target) {
   /* Function variables */
   int error;
-  int numReg = 1;
+  int numBytes = 1;
   
   /* Wakeup */
   if(!(_wakeup(target))) {
@@ -161,7 +177,8 @@ void change_measurement_mode(uint8_t target) {
   }
 
   /* Read Value */
-  if((error = I2c.read(target, MEASUREMENT_MODE, numReg)) != 0) {
+  error = Wire.requestFrom((uint8_t)target, (uint8_t)numBytes /* how many bytes */, (uint32_t)MEASUREMENT_MODE /* from address*/, (uint8_t)1/* Address size - 1 byte*/, true /* STOP*/);    
+  if(error != numBytes ) {  
     Serial.print("Failed to read measurement mode. Error code: ");
     Serial.println(error);
     /* FATAL ERROR */
@@ -169,7 +186,7 @@ void change_measurement_mode(uint8_t target) {
   }
 
   /* Change mode if single */
-  if(I2c.receive() != CONTINUOUS) {
+  if(Wire.read() != CONTINUOUS) {
     /* Wakeup */
     if(!(_wakeup(target))) {
       Serial.print("Failed to wake up sensor.");
@@ -178,7 +195,13 @@ void change_measurement_mode(uint8_t target) {
     }
     
     Serial.println("Changing Measurement Mode to Continuous...");
-    if((error = I2c.write(target, MEASUREMENT_MODE, CONTINUOUS)) != 0) {
+    
+    Wire.beginTransmission(target);
+    Wire.write(MEASUREMENT_MODE);
+    Wire.write(CONTINUOUS);
+    error = Wire.endTransmission(true);
+    
+    if(error != 0) {
       Serial.print("Failed to send request. Error code: ");
       Serial.println(error); 
       /* FATAL ERROR */
@@ -210,7 +233,8 @@ void read_sensor_measurements(uint8_t target) {
   }
 
   /* Request values */
-  if((error = I2c.read(target, ERROR_STATUS, numBytes)) != 0) {
+    error = Wire.requestFrom((uint8_t)target, (uint8_t)numBytes /* how many bytes */, (uint32_t)ERROR_STATUS /* from address*/, (uint8_t)1/* Address size - 1 byte*/, true /* STOP*/);    
+  if(error != numBytes ) {  
     Serial.print("Failed to read values. Error code: ");
     Serial.println(error);
     return;
@@ -218,18 +242,18 @@ void read_sensor_measurements(uint8_t target) {
 
   /* Read values */
   /* Error status */
-  uint8_t eStatus = I2c.receive();
+  uint8_t eStatus = Wire.read();
 
   /* Reserved */
-  uint8_t byteHi = I2c.receive();
-  uint8_t byteLo = I2c.receive();
+  uint8_t byteHi = Wire.read();
+  uint8_t byteLo = Wire.read();
 
-  byteHi = I2c.receive();
-  byteLo = I2c.receive();
+  byteHi = Wire.read();
+  byteLo = Wire.read();
 
   /* CO2 value */
-  byteHi = I2c.receive();
-  byteLo = I2c.receive();
+  byteHi = Wire.read();
+  byteLo = Wire.read();
   uint16_t co2Val = ((int16_t)(int8_t) byteHi << 8) | (uint16_t)byteLo;
 
   Serial.print("CO2: ");
