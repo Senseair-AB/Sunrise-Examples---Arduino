@@ -66,7 +66,16 @@ uint16_t values[256];
 /* Array for storing strings from reading objects */
 char device[12];
 
-
+/**
+ * @brief  Reads slave response.
+ * 
+ * @param  waitBytes:    Number of expected bytes for receive packet
+ *         funCode:      Function code
+ * @note   This function stores the values read through a global
+ *         araay, which can then be read to obtain the values.
+ * @retval Error status, >0 on success (response size), -1 on communication error
+ *         or time-out, and 1 - 3 for exceptions.
+ */
 int modbus_read_response(int waitBytes, uint8_t funCode) {
   /* Time-out variable */
   unsigned long startTime = millis();
@@ -325,12 +334,9 @@ int write_multiple_registers(uint8_t comAddr, uint16_t regAddr, uint16_t numReg,
 int read_device_id(uint8_t comAddr, uint8_t objId) {
   /* Return variable */
   int error = 0;
-
   /* PDU variables */
   uint8_t funCode = 0x2B;
-
   uint8_t meiType = 0x0E;
-
   uint8_t idCode = 0x04;
 
   /* Define Modbus PDU */
