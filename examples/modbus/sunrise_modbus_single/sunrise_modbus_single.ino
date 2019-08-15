@@ -47,6 +47,9 @@ const uint16_t ERROR_STATUS             = 0x0000;
 const uint16_t MEASUREMENT_MODE         = 0x000A;
 const uint16_t START_MEASUREMENT        = 0x0021;
 const uint16_t ABC_TIME                 = 0x0022;
+const uint16_t SENSOR_STATE             = 0x0022;
+
+const uint16_t SENSOR_STATE_SZ          = 0x000C;
 
 /* Measurement modes */
 const uint16_t CONTINUOUS               = 0x0000;
@@ -59,11 +62,6 @@ const int WAIT_FOR_PIN_MS               = 2000;
 /* Reading period, in milliseconds. Default is 4 seconds */
 int readPeriodMs = 4000;
 
-/* 
- * Variable for keeping track of how many hours the sensor
- * has been running. Used for increasing the ABC Time register.
- */
-int abc = 1;
 
 /**  
  * Arrays for request, responses and register values
@@ -80,7 +78,7 @@ uint16_t values[256];
 /* Array for storing strings from reading objects */
 char device[12];
 /* Array for storing sensor state data */
-uint16_t state[12];
+uint16_t state[SENSOR_STATE_SZ];
 
 /**
  * @brief  Reads slave response.
@@ -656,8 +654,6 @@ void init_measurement(uint8_t target) {
 
   uint16_t numRegRead = 0x0004;
 
-  uint16_t numRegState = 0x000C;
-
   /* Drive EN pin HIGH */
   digitalWrite(SUNRISE_EN, HIGH);
 
@@ -666,13 +662,13 @@ void init_measurement(uint8_t target) {
 
   /* Start measurement command to HR34 */
   if(write_multiple_registers(target, START_MEASUREMENT, numRegCmd, startCommand) != 0) {
-    Serial.println("EXCEPTION: Failed to send measurement command");
     digitalWrite(SUNRISE_EN, LOW);
+    Serial.println("EXCEPTION: Failed to send measurement command");
     /* FATAL ERROR */
     while(true);
   }
 
-  /* Wait until ready pin goes low, 2 sec default */
+  /* Wait until ready pin goes low, 2 sec for default measurement parameters */
   delay(WAIT_FOR_PIN_MS);
 
   /* Read values */
@@ -688,15 +684,15 @@ void init_measurement(uint8_t target) {
   /* Read error status */
   uint16_t eStatus = values[0];
 
-  /* Read sensor state data from HR56-HR46 and save it for next measurement */
-  if(read_holding_registers(target, ABC_TIME, numRegState) != 0) {
-    Serial.println("EXCEPTION: Failed to read Status");
+  /* Read sensor state data from HR35-HR46 and save it for next measurement */
+  if(read_holding_registers(target, SENSOR_STATE, SENSOR_STATE_SZ) != 0) {
     digitalWrite(SUNRISE_EN, LOW);
+    Serial.println("EXCEPTION: Failed to read Status");
     /* FATAL ERROR */
     while(true);
   }
   
-  for(int n = 0 ; n < 12 ; n++) {
+  for(int n = 0 ; n < SENSOR_STATE_SZ ; n++) {
     state[n] = values[n];
   }
 
@@ -728,8 +724,6 @@ void read_sensor_measurements(uint8_t target) {
 
   uint16_t numRegRead = 0x0004;
 
-  uint16_t numRegState = 0x000C;
-
   /*Drive EN pin HIGH */
   digitalWrite(SUNRISE_EN, HIGH);
 
@@ -738,13 +732,14 @@ void read_sensor_measurements(uint8_t target) {
     
 
   /* Write measurement command and state data to HR34-HR46 */
-  uint16_t measCommand[13];
+  uint16_t measCommand[SENSOR_STATE_SZ + 1];
   measCommand[0] = 0x0001;
   
-  for(int n = 0 ; n < 12 ; n++) {
+  for(int n = 0 ; n < SENSOR_STATE_SZ ; n++) {
     measCommand[n+1] = state[n];
   }
-  if(write_multiple_registers(target, START_MEASUREMENT, numRegCmd, measCommand) != 0) {
+  
+  if(write_multiple_registers(target, START_MEASUREMENT, SENSOR_STATE_SZ + 1, measCommand) != 0) {
     Serial.println("EXCEPTION: Failed to send measurement command");
     digitalWrite(SUNRISE_EN, LOW);
     return;
@@ -767,12 +762,12 @@ void read_sensor_measurements(uint8_t target) {
   uint16_t eStatus = values[0];
 
   /* Read sensor state data from HR56-HR46 and save it for next measurement */
-  if(read_holding_registers(target, ABC_TIME, numRegState)) {
+  if(read_holding_registers(target, SENSOR_STATE, SENSOR_STATE_SZ)) {
     Serial.println("EXCEPTION: Failed to read Status");
     digitalWrite(SUNRISE_EN, LOW);
     return;
   }
-  for(int n = 0 ; n < 12 ; n++) {
+  for(int n = 0 ; n < SENSOR_STATE_SZ ; n++) {
     state[n] = values[n];
   }
 
@@ -788,46 +783,6 @@ void read_sensor_measurements(uint8_t target) {
   Serial.println(eStatus, HEX);
 }
 
-/**
- * @brief  Increases the ABC Time by one.
- * 
- * @param  target: The sensor's communication address
- * @note   This example shows a simple way to 
- *         increase the sensor's ABC Time
- * @retval None
- */
-int increase_abc(uint8_t target) {
-  /* Function variables */
-  uint16_t regAddr = 0x0022;
-  uint16_t numReg = 0x0001;
-
-  /*Drive EN pin HIGH */
-  digitalWrite(SUNRISE_EN, HIGH);
-
-  /* Wait for sensor start-up and stabilization */
-  delay(STABILIZATION_MS);
-
-  /* Read current value from HR35 */
-  if(read_holding_registers(target, regAddr, numReg) != 0) {
-    Serial.println("EXCEPTION: Failed to read register value");
-    abc--;
-    return;
-  }
-
-  uint16_t newValue[] = {values[0] + 1};
-
-  /* Write new value back to HR35 */
-  if(write_multiple_registers(target, regAddr, numReg, newValue) != 0) {
-    Serial.println("EXCEPTION: Failed to write to register command");
-    abc--;
-    return;
-  }
-
-  /* Drive EN pin low */
-  digitalWrite(SUNRISE_EN, LOW);
-
-  Serial.println("\nABC Time updated\n");
-}
 
 /**
  * @brief  The main function loop. Reads the sensor's current
@@ -838,11 +793,14 @@ int increase_abc(uint8_t target) {
  */
 void loop() {
   static int pin_value = HIGH;
+  static unsigned long last_abc_stamp = 0;
 
   /* When an hour has passed, increase ABC Time */  
-  if((abc*3600000) <= millis()) {
-    increase_abc(SUNRISE_ADDR);
-    abc++;
+  if(3600000 < (unsigned long)((long)millis() - (long)last_abc_stamp)) {
+    /* Use ABC time stored in the sensor state */
+    state[0] = state[0] + 1;
+    last_abc_stamp = millis();
+    Serial.println("ABC time incremented.");
   }
 
   /* Read measurements */
