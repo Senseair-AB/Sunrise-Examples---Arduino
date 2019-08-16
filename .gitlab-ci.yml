@@ -7,5 +7,4 @@ compile:
     - windows
   script:
     - cd .\\examples\\modbus\\sunrise_modbus_continuous
-    - dir
-    - arduino-cli compile --fqbn arduino:avr -o ignored0.bin sunrise_modbus_continuous.ino
+    - arduino-cli compile --fqbn arduino:avr:mega -o ignored0.bin sunrise_modbus_continuous.ino
