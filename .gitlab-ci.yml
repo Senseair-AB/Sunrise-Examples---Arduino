@@ -1,0 +1,14 @@
+image: ubuntu:18.04
+ 
+before_script:
+  - ./setup-build-env.sh
+ 
+stages:
+  - build
+ 
+compile:
+  stage: build
+  tags:
+    - docker
+  script:
+    - arduino-cli compile -o ignored0.bin ./sunrise-examples-arduino/examples/modbus/sunrise_modbus_continuous/sunrise_modbus_continuous.ino
