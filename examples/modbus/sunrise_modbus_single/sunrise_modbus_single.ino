@@ -35,6 +35,9 @@ const uint8_t   SUNRISE_ADDR            = 0x68;
  * Sunrise".
  */
 const int       WAIT_MS                 = 180;
+/* For baudrate equal 9600 the Modbus 3.5T interval is close to 3.5 ms, we round it to 4 ms*/
+const int       INTER_PACKET_INTERVAL_MS  = 4;
+
 
 /* Error codes */
 const int COMMUNICATION_ERROR           = -1;
@@ -92,48 +95,41 @@ uint16_t state[SENSOR_STATE_SZ];
  */
 int modbus_read_response(int waitBytes, uint8_t funCode) {
   /* Time-out variable */
-  unsigned long startTime = millis();
+  unsigned long byteTime = millis();
+  int           available_bytes;
+  unsigned long timestamp;
   /* Return variable */
   int error;
-  /* Wait for response */
-  while(SunriseSerial.available() < waitBytes) {
-    /* Time out if it takes more than 180 ms */
-    if(WAIT_MS <= (millis() - startTime)) {
-      /* Check if it is an exception */
-      if(SunriseSerial.available() == 5) {
-        /* Store response bytes into a response array */
-        int responseSize = SunriseSerial.available();
 
-        for(int n = 0 ; n < responseSize ; n++) {
-          response[n] = SunriseSerial.read();
-        }
-
-        /* Check the response for errors and exceptions */
-        error = _handler(response, funCode, responseSize);
-     
-        return error;
-      }
-      /* Clear buffer */
-      while(SunriseSerial.available() > 0) {
-        SunriseSerial.read();
-      }
-      
+  /* Wait for first byte in packet */
+  while((available_bytes = SunriseSerial.available()) == 0) {
+    unsigned long timeout = (unsigned long)((long)millis() - (long)byteTime);
+    if(WAIT_MS < timeout) {
       return COMMUNICATION_ERROR;
     }
   }
+  
+  byteTime = millis();    
+  
+  do {
+    int new_available_bytes = SunriseSerial.available();
+        
+    timestamp = millis();
+        
+    if(available_bytes != new_available_bytes) {
+      byteTime = timestamp;
+      available_bytes = new_available_bytes;
+    }
+  } while(INTER_PACKET_INTERVAL_MS > (unsigned long)((long)timestamp - (long)byteTime));
 
-  /* If the request was Successful */
-  /* Store response bytes into a response array */
-  int responseSize = SunriseSerial.available();
 
-  for(int n = 0 ; n < responseSize ; n++) {
+  for(int n = 0 ; n < available_bytes ; n++) {
     response[n] = SunriseSerial.read();
   }
-
-  /* Check response for exceptions */
-  error = _handler(response, funCode, responseSize);
   
-  return ((error == 0) ? responseSize : error);
+  /* Check response for exceptions */
+  error = _handler(response, funCode, available_bytes);
+  return ((error == 0) ? available_bytes : error);
 }
 
 /**
@@ -411,37 +407,41 @@ int read_device_id(uint8_t comAddr, uint8_t objId) {
 int _handler(uint8_t pdu[], uint8_t funCode, int len) {
   /* Return variable */
   int error = 0;
-
   /* Function variables */
-  uint8_t exceptionFunCode = funCode + 0x80; 
-
-  /* Check for corrupt data in the response */
-  uint16_t crc = _generate_crc(pdu, (len - 2));
-  uint8_t crcHi = (crc >> 8);
-  uint8_t crcLo = crc & 0xFF;
-
-  if(crcLo != pdu[len - 2] || crcHi != pdu[len - 1]) {
-    return COMMUNICATION_ERROR;
-  }
-
-  /* Check response for exceptions */  
-  if(pdu[1] == exceptionFunCode) {
-    switch (pdu[2]) {
-      case ILLEGAL_FUNCTION:
-        error = -ILLEGAL_FUNCTION;
-        break;
-
-      case ILLEGAL_DATA_ADDRESS:
-        error = -ILLEGAL_DATA_ADDRESS;
-        break;
-
-      case ILLEGAL_DATA_VALUE:
-        error = -ILLEGAL_DATA_VALUE;
-        break;
-
-      default:
-        break;   
+  uint8_t exceptionFunCode = funCode + 0x80;
+  /* Check for malformed packet */
+  if(len >= 4) {
+    /* Check for corrupt data in the response */
+    uint16_t crc = _generate_crc(pdu, (len - 2));
+    uint8_t crcHi = (crc >> 8);
+    uint8_t crcLo = crc & 0xFF;
+  
+    if(crcLo != pdu[len - 2] || crcHi != pdu[len - 1]) {
+      return COMMUNICATION_ERROR;
     }
+  
+    /* Check response for exceptions */  
+    if(pdu[1] == exceptionFunCode) {
+      switch (pdu[2]) {
+        case ILLEGAL_FUNCTION:
+          error = -ILLEGAL_FUNCTION;
+          break;
+  
+        case ILLEGAL_DATA_ADDRESS:
+          error = -ILLEGAL_DATA_ADDRESS;
+          break;
+  
+        case ILLEGAL_DATA_VALUE:
+          error = -ILLEGAL_DATA_VALUE;
+          break;
+  
+        default:
+          error = COMMUNICATION_ERROR;
+          break;   
+      }
+    }
+  } else {
+    error = COMMUNICATION_ERROR;
   }
   return error;
 }
