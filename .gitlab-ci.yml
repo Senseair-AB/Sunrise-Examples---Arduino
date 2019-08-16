@@ -6,5 +6,8 @@ compile:
   tags:
     - windows
   script:
-    - cd .\\examples\\modbus\\sunrise_modbus_continuous
-    - arduino-cli compile  --fqbn arduino:avr:mega -o ignored0.bin sunrise_modbus_continuous.ino
+    - arduino-cli compile  --fqbn arduino:avr:mega -o ignored0.bin .\\examples\\modbus\\sunrise_modbus_continuous\\sunrise_modbus_continuous.ino
+    - arduino-cli compile  --fqbn arduino:avr:mega -o ignored1.bin .\\examples\\modbus\\sunrise_modbus_single\\sunrise_modbus_single.ino
+    - arduino-cli compile  --fqbn arduino:avr:mega -o ignored2.bin .\\examples\\modbus\\sunrise_i2c_continuous\\sunrise_i2c_continuous.ino
+    - arduino-cli compile  --fqbn arduino:avr:mega -o ignored3.bin .\\examples\\modbus\\sunrise_i2c_single\\sunrise_i2c_single.ino
+    
