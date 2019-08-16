@@ -15,8 +15,8 @@ where the first is only used in the I2C examples and the latter is used in all b
 
 ## Directory Contents
 
- - sunrise-examples-arduino/examlpes/modbus/		Example for Modbus communication
- - sunrise-examples-arduino/examlpes/i2c/			Examples for I2C communication
+ - sunrise-examples-arduino/examlpes/modbus/		Example for Modbus communication (connection diagram - [wiring/sunrise_modbus_wiring.pdf](wiring/sunrise_modbus_wiring.pdf))
+ - sunrise-examples-arduino/examlpes/i2c/			Examples for I2C communication (connection diagram - [wiring/sunrise_i2c_wiring.pdf](wiring/sunrise_i2c_wiring.pdf))
  - sunrise-examples-arduino/wiring/                 Pictures of the wiring for the examples
 
 ### How to Run the Examples
