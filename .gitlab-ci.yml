@@ -6,4 +6,4 @@ compile:
   tags:
     - windows
   script:
-    - arduino-cli compile -o ignored0.bin ./sunrise-examples-arduino/examples/modbus/sunrise_modbus_continuous/sunrise_modbus_continuous.ino
+    - arduino-cli compile -o ignored0.bin ./examples/modbus/sunrise_modbus_continuous/sunrise_modbus_continuous.ino
