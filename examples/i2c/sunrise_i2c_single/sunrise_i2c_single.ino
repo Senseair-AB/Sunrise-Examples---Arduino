@@ -11,14 +11,20 @@
  * @details     Tested on Arduino Mega 2560     
  *              
  * @author      William Sandkvist
- * @version     0.06
+ * @version     0.07
  * @date        2019-08-12
  *
  *******************************************************************************
  */
 
 #include <Wire.h>
-#include <SoftwareSerial.h>
+
+/* WARINING!!!
+  Some wire driver implementations do not corectly implement Wire.endTransmission(false) function, 
+  so please check this before disable WIRE_WORKAROUND!
+ */
+#define WIRE_WORKAROUND   (0)
+
 
 /* Define serial EN pin */
 const int       SUNRISE_EN              = 8;
@@ -57,6 +63,21 @@ void  reInitI2C() {
   Wire.begin();
   /* Setup I2C clock to 100kHz */
   Wire.setClock(100000);  
+}
+
+
+/* Workaround regarding BAD implementations of Wire.endTransmission(false) function */
+int WireRequestFrom(uint8_t dev_addr, uint8_t bytes_numbers, uint8_t offset_to_read, bool stop) {
+ int error;
+#if (WIRE_WORKAROUND == 1)
+ error = Wire.requestFrom((uint8_t)dev_addr, (uint8_t)bytes_numbers /* how many bytes */, (uint32_t)offset_to_read /* from address*/, (uint8_t)1/* Address size - 1 byte*/, stop /* STOP*/); 
+#else 
+  Wire.beginTransmission(dev_addr);
+  Wire.write(offset_to_read); //starting register address, from which read data
+  Wire.endTransmission(false);
+  error = Wire.requestFrom((uint8_t)dev_addr, (uint8_t)bytes_numbers /* how many bytes */, (uint8_t)stop /* STOP*/);
+#endif
+  return error;
 }
 
 /** 
@@ -147,7 +168,7 @@ void read_sensor_config(uint8_t target) {
   }
 
   /* Request values */
-  error = Wire.requestFrom((uint8_t)target, (uint8_t)numBytes /* how many bytes */, (uint32_t)MEASUREMENT_MODE /* from address*/, (uint8_t)1/* Address size - 1 byte*/, true /* STOP*/);    
+  error = WireRequestFrom(target, numBytes /* how many bytes */, MEASUREMENT_MODE /* from address*/, true /* STOP*/);    
   if(error != numBytes ) {
     Serial.print("Failed to write to target. Error code : ");
     Serial.println(error);
@@ -202,7 +223,7 @@ void change_measurement_mode(uint8_t target) {
   }
 
   /* Read Value */
-  error = Wire.requestFrom((uint8_t)target, (uint8_t)numBytes /* how many bytes */, (uint32_t)MEASUREMENT_MODE /* from address*/, (uint8_t)1/* Address size - 1 byte*/, true /* STOP*/);    
+  error = WireRequestFrom(target, numBytes /* how many bytes */, MEASUREMENT_MODE /* from address*/, true /* STOP*/);    
   if(error != numBytes ) {  
     Serial.print("Failed to read measurement mode. Error code: ");
     Serial.println(error);
@@ -271,7 +292,7 @@ void save_state(uint8_t target) {
   }
 
   /* Request state data */
-  error = Wire.requestFrom((uint8_t)target, (uint8_t)numBytes /* how many bytes */, (uint32_t)ABC_TIME /* from address*/, (uint8_t)1/* Address size - 1 byte*/, true /* STOP*/);    
+  error = WireRequestFrom(target, numBytes /* how many bytes */, ABC_TIME /* from address*/, true /* STOP*/);    
   if(error != numBytes ) { 
     Serial.print("Failed to read measurements command. Error code: ");
     Serial.println(error);
@@ -353,7 +374,7 @@ void read_sensor_measurements(uint8_t target) {
   }
 
   /* Request values */
-  error = Wire.requestFrom((uint8_t)target, (uint8_t)numRegRead /* how many bytes */, (uint32_t)ERROR_STATUS /* from address*/, (uint8_t)1/* Address size - 1 byte*/, true /* STOP*/);    
+  error = WireRequestFrom(target, numRegRead /* how many bytes */, ERROR_STATUS /* from address*/, true /* STOP*/);    
   if(error != numRegRead ) {  
     Serial.print("Failed to read values. Error code: ");
     Serial.println(error);
@@ -385,7 +406,7 @@ void read_sensor_measurements(uint8_t target) {
   }
 
   /* Read sensor state data from 0xC4-0xDB and save it for next measurement */
-  error = Wire.requestFrom((uint8_t)target, (uint8_t)numRegState /* how many bytes */, (uint32_t)ABC_TIME /* from address*/, (uint8_t)1/* Address size - 1 byte*/, true /* STOP*/); 
+  error = WireRequestFrom(target, numRegState /* how many bytes */, ABC_TIME /* from address*/, true /* STOP*/); 
   if(error != numRegState) {
     Serial.print("Failed to read measurements command. Error code: ");
     Serial.println(error);

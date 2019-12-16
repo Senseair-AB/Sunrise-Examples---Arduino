@@ -9,13 +9,19 @@
  * @details     Tested on Arduino Mega 2560
  *              
  * @author      William Sandkvist
- * @version     0.05
- * @date        2019-08-13
+ * @version     0.06
+ * @date        2019-12-16
  * 
  *******************************************************************************
  */
 
 #include <Wire.h>
+
+/* WARINING!!!
+  Some wire driver implementations do not corectly implement Wire.endTransmission(false) function, 
+  so please check this before disable WIRE_WORKAROUND!
+ */
+#define WIRE_WORKAROUND   (0)
 
 /* Sunrise communication address, both for Modbus and I2C */
 const uint8_t   SUNRISE_ADDR            = 0x68;
@@ -40,6 +46,20 @@ void  reInitI2C() {
   Wire.begin();
   /* Setup I2C clock to 100kHz */
   Wire.setClock(100000);  
+}
+
+/* Workaround regarding BAD implementations of Wire.endTransmission(false) function */
+int WireRequestFrom(uint8_t dev_addr, uint8_t bytes_numbers, uint8_t offset_to_read, bool stop) {
+ int error;
+#if (WIRE_WORKAROUND == 1)
+ error = Wire.requestFrom((uint8_t)dev_addr, (uint8_t)bytes_numbers /* how many bytes */, (uint32_t)offset_to_read /* from address*/, (uint8_t)1/* Address size - 1 byte*/, stop /* STOP*/); 
+#else 
+  Wire.beginTransmission(dev_addr);
+  Wire.write(offset_to_read); //starting register address, from which read data
+  Wire.endTransmission(false);
+  error = Wire.requestFrom((uint8_t)dev_addr, (uint8_t)bytes_numbers /* how many bytes */, (uint8_t)stop /* STOP*/);
+#endif
+  return error;
 }
 
 
@@ -122,7 +142,7 @@ void read_sensor_config(uint8_t target) {
   }
 
   /* Request values */
-  error = Wire.requestFrom((uint8_t)target, (uint8_t)numBytes /* how many bytes */, (uint32_t)MEASUREMENT_MODE /* from address*/, (uint8_t)1/* Address size - 1 byte*/, true /* STOP*/);    
+  error = WireRequestFrom(target, numBytes, MEASUREMENT_MODE /* from address*/, true /* STOP*/);    
   if(error != numBytes ) {
     Serial.print("Failed to write to target. Error code : ");
     Serial.println(error);
@@ -177,7 +197,7 @@ void change_measurement_mode(uint8_t target) {
   }
 
   /* Read Value */
-  error = Wire.requestFrom((uint8_t)target, (uint8_t)numBytes /* how many bytes */, (uint32_t)MEASUREMENT_MODE /* from address*/, (uint8_t)1/* Address size - 1 byte*/, true /* STOP*/);    
+  error = WireRequestFrom(target, numBytes /* how many bytes */, MEASUREMENT_MODE /* from address*/, true /* STOP*/);    
   if(error != numBytes ) {  
     Serial.print("Failed to read measurement mode. Error code: ");
     Serial.println(error);
@@ -233,7 +253,7 @@ void read_sensor_measurements(uint8_t target) {
   }
 
   /* Request values */
-    error = Wire.requestFrom((uint8_t)target, (uint8_t)numBytes /* how many bytes */, (uint32_t)ERROR_STATUS /* from address*/, (uint8_t)1/* Address size - 1 byte*/, true /* STOP*/);    
+    error = WireRequestFrom(target, numBytes /* how many bytes */, ERROR_STATUS /* from address*/, true /* STOP*/);    
   if(error != numBytes ) {  
     Serial.print("Failed to read values. Error code: ");
     Serial.println(error);
