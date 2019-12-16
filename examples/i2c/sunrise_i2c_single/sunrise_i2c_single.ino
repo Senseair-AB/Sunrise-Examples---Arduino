@@ -8,7 +8,7 @@
  *              Based on the "I2C on Senseair Sunrise" documentation 
  *              (available on the www.senseair.com website). This example mainly
  *              covers operations in single measurement mode.
- * @details     Tested on Arduino Mega 2560     
+ * @details     Tested on Arduino Mega 2560, Adafruit ESP32 Feather     
  *              
  * @author      William Sandkvist
  * @version     0.07
@@ -22,6 +22,7 @@
 /* WARINING!!!
   Some wire driver implementations do not corectly implement Wire.endTransmission(false) function, 
   so please check this before disable WIRE_WORKAROUND!
+  For example, known "bad" implementations are: Nucleo STM32
  */
 #define WIRE_WORKAROUND   (0)
 
