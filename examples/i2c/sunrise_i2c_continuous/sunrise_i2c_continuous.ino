@@ -9,8 +9,8 @@
  * @details     Tested on Arduino Mega 2560, Adafruit ESP32 Feather
  *              
  * @author      William Sandkvist
- * @version     0.06
- * @date        2019-12-16
+ * @version     0.07
+ * @date        2019-12-20
  * 
  *******************************************************************************
  */
@@ -23,20 +23,25 @@
   For example, known "bad" implementations are: Nucleo STM32 
  */
 #define WIRE_WORKAROUND   (0)
+/* It could be necessary to disable ABC if sensor will be tested with CO2 concentrations below 400ppm. */
+#define DISABLE_ABC       (0)
 
 /* Sunrise communication address, both for Modbus and I2C */
 const uint8_t   SUNRISE_ADDR            = 0x68;
 
 /* Amount of wakeup attempts before time-out */
 const int       ATTEMPTS                 = 5;
+/* It takes 25ms to write one EE register */
+const int       EEPROM_UPDATE_DELAY_MS   = 25;
 
 /* Register Addresses */
 const uint8_t ERROR_STATUS             = 0x01;
 const uint8_t MEASUREMENT_MODE         = 0x95;
+const uint8_t METER_CONTROL            = 0xA5;
 
 /* Measurement modes */
-const uint16_t CONTINUOUS               = 0x0000;
-const uint16_t SINGLE                   = 0x0001;
+const uint16_t CONTINUOUS              = 0x0000;
+const uint16_t SINGLE                  = 0x0001;
 
 /* Reading period, in milliseconds. Default is 4 seconds */
 int readPeriodMs = 4000;
@@ -116,6 +121,10 @@ void setup()
   read_sensor_config(SUNRISE_ADDR);
   Serial.println();
 
+#if (DISABLE_ABC ==1)  
+  setABC(SUNRISE_ADDR, false);
+#endif
+
   /* Change measurement mode if single */
   change_measurement_mode(SUNRISE_ADDR);
 
@@ -134,7 +143,7 @@ void setup()
 void read_sensor_config(uint8_t target) {
   /* Function variables */
   int error;
-  int numBytes = 5;
+  int numBytes = 7;
 
   /* Wakeup */
   if(!(_wakeup(target))) {
@@ -164,15 +173,110 @@ void read_sensor_config(uint8_t target) {
   byteLo = Wire.read();
   uint16_t numSamples = ((int16_t)(int8_t) byteHi << 8) | (uint16_t)byteLo;
 
+  /* ABCPeriod */
+  byteHi = Wire.read();
+  byteLo = Wire.read();
+  uint16_t abcPeriod = ((int16_t)(int8_t) byteHi << 8) | (uint16_t)byteLo;
+
+  /* Most propable that the sensor will not go into sleep mode, but to be insure...*/
+  /* Wakeup */
+  if(!(_wakeup(target))) {
+    Serial.print("Failed to wake up sensor.");
+    return;
+  }
+
+  /* Request values */
+  error = WireRequestFrom(target, 1, METER_CONTROL /* from address*/, true /* STOP*/);    
+  if(error != 1 ) {
+    Serial.print("Failed to write to target. Error code : ");
+    Serial.println(error);
+    return;
+  }
+ 
+  uint8_t  meterControl = Wire.read();
+
   Serial.print("Measurement Mode: ");
   Serial.println(measMode);
+
   readPeriodMs = measPeriod * 1000;
 
-  Serial.print("Measurement Period: ");
+  Serial.print("Measurement Period, sec: ");
   Serial.println(measPeriod);
 
   Serial.print("Number of Samples: ");
-  Serial.println(numSamples);  
+  Serial.println(numSamples);
+  
+  if((0U == abcPeriod) ||  (0xFFFFU == abcPeriod) || (meterControl & 0x02U)) {
+    Serial.println("ABCPeriod: disabled");
+  } else {
+    Serial.print("ABCPeriod, hours: ");
+    Serial.println(abcPeriod);  
+  }  
+  
+  Serial.print("MeterControl: ");
+  Serial.println(meterControl, HEX); 
+
+#if (DISABLE_ABC ==0)
+  /* If we do not implicity disable ABC try to enable it in case if someone forget to do that...*/
+  if((meterControl & 0x02U) != 0) {    
+    setABC(target, true);
+  }
+#endif
+  
+}
+
+/**
+ * @brief  Enable or disable ABC.
+ * 
+ * @param  target: The sensor's communication address
+ * @param  enable: Set true to enable or false to disable ABC
+ * @note   This example shows a simple way to enable/disable ABC. 
+ * It could be necessary to disable ABC if sensor will be tested with CO2 concentrations below 400ppm.
+ * @retval None
+ */
+void setABC(uint8_t target, bool enable) {
+  /* Wakeup */
+  if(!(_wakeup(target))) {
+    Serial.print("Failed to wake up sensor.");
+    return;
+  }
+
+  /* Request values */
+  int error = WireRequestFrom(target, 1, METER_CONTROL /* from address*/, true /* STOP*/);    
+  if(error != 1 ) {
+    Serial.print("Failed to write to target. Error code : ");
+    Serial.println(error);
+    return;
+  }
+
+  uint8_t  meterControl = Wire.read();
+
+  if(enable) {
+    Serial.println("Enabling ABC...");
+    meterControl &= (uint8_t)~0x02U;
+  } else {
+    Serial.println("Disabling ABC...");
+    meterControl |= 0x02U;
+  }
+
+  /* Wakeup */
+  if(!(_wakeup(target))) {
+    Serial.print("Failed to wake up sensor.");
+    return;
+  }
+
+  Wire.beginTransmission(target);
+  Wire.write(METER_CONTROL);
+  Wire.write(meterControl);
+  error = Wire.endTransmission(true);
+  delay(EEPROM_UPDATE_DELAY_MS);
+  
+  if(error != 0) {
+    Serial.print("Failed to send request. Error code: ");
+    Serial.println(error); 
+    /* FATAL ERROR */
+    while(true);
+  }
 }
 
 /**
@@ -221,6 +325,7 @@ void change_measurement_mode(uint8_t target) {
     Wire.write(MEASUREMENT_MODE);
     Wire.write(CONTINUOUS);
     error = Wire.endTransmission(true);
+    delay(EEPROM_UPDATE_DELAY_MS);
     
     if(error != 0) {
       Serial.print("Failed to send request. Error code: ");
