@@ -679,7 +679,7 @@ void init_measurement(uint8_t target) {
     while(true);
   }
   /* Read CO2 concentration */
-  uint16_t co2Val = values[3];
+  int16_t co2Val = (int16_t)values[3];
 
   /* Read error status */
   uint16_t eStatus = values[0];

@@ -623,7 +623,7 @@ void read_sensor_measurements(uint8_t target) {
   }else {
     /* Read CO2 concentration */
     Serial.print("CO2: ");
-    Serial.print(values[3]);
+    Serial.print((int16_t)values[3]);
     Serial.println(" ppm");
 
     /* Read error status */
