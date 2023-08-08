@@ -22,9 +22,11 @@ where the first is only used in the I2C examples and the latter is used in all b
 ### How to Run the Examples
 
 In order to make the examples work, you must do the following:
- - Open one of the examlpes in the Arduino IDE
+ - Open one of the examples in the Arduino IDE
  - Upload the file into the target memory
  - Run the example
+
+__Note__: The default value for the UART baud rate between the examples and the host system is 115200 baud.
 
 ## Author
 
